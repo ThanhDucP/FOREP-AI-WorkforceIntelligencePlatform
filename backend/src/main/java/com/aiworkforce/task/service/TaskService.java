@@ -18,8 +18,12 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.scheduling.annotation.Scheduled;
+
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class TaskService {
     
     private final TaskRepository taskRepository;
@@ -72,10 +76,20 @@ public class TaskService {
     }
     
     @Transactional
+    @Scheduled(cron = "0 0 1 * * ?") // Runs daily at 1:00 AM
     public void checkOverdueTasks() {
-        // Mock method to be scheduled
-        // Query tasks where dueDate < NOW() and status != DONE
-        // Update them to OVERDUE and publish TASK_OVERDUE events
+        log.info("Running scheduled check for overdue tasks...");
+        LocalDateTime now = LocalDateTime.now();
+        List<Task> overdueTasks = taskRepository.findByStatusNotAndDueDateBefore(TaskStatus.DONE, now);
+        
+        for (Task task : overdueTasks) {
+            if (task.getStatus() != TaskStatus.OVERDUE) {
+                task.setStatus(TaskStatus.OVERDUE);
+                taskRepository.save(task);
+                publishEvent(EventType.TASK_OVERDUE, task, "Tác vụ quá hạn: " + task.getTitle());
+                log.info("Task {} has been marked as OVERDUE", task.getId());
+            }
+        }
     }
 
     private void publishEvent(EventType type, Task task, String details) {

@@ -5,6 +5,8 @@ import com.aiworkforce.auth.dto.LoginRequest;
 import com.aiworkforce.auth.dto.RegisterRequest;
 import com.aiworkforce.auth.service.AuthService;
 import com.aiworkforce.core.response.ApiResponse;
+import com.aiworkforce.identity.dto.EmployeeResponse;
+import com.aiworkforce.identity.service.EmployeeService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -16,6 +18,7 @@ import org.springframework.web.bind.annotation.*;
 public class AuthController {
 
     private final AuthService authService;
+    private final EmployeeService employeeService;
 
     @PostMapping("/register")
     public ResponseEntity<ApiResponse<AuthResponse>> register(@RequestBody @Valid RegisterRequest request) {
@@ -33,7 +36,7 @@ public class AuthController {
     }
 
     @GetMapping("/me")
-    public ResponseEntity<ApiResponse<Object>> getMe() {
-        return ResponseEntity.ok(ApiResponse.success(new Object(), "Current User Details"));
+    public ResponseEntity<ApiResponse<EmployeeResponse>> getMe() {
+        return ResponseEntity.ok(ApiResponse.success(employeeService.getCurrentEmployeeProfile(), "Current User Details"));
     }
 }

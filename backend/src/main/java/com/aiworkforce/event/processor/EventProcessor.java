@@ -29,6 +29,8 @@ public class EventProcessor {
             case TASK_OVERDUE -> score = -5;
             case TASK_CREATED -> score = 2;
             case TASK_UPDATED -> score = 1;
+            case LEAVE_APPROVED -> score = 15;
+            case LEAVE_REQUESTED -> score = 0;
             default -> score = 0;
         }
         event.setImpactScore(score);

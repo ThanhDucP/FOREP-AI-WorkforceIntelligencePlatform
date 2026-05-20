@@ -1,0 +1,25 @@
+package com.aiworkforce.identity.dto;
+
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+import java.time.LocalDateTime;
+import java.util.UUID;
+
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+public class OrganizationResponse {
+    private UUID id;
+    private String name;
+    private String domain;
+    private String logoUrl;
+    private Double latitude;
+    private Double longitude;
+    private Integer allowedRadiusMeters;
+    private LocalDateTime createdAt;
+    private LocalDateTime updatedAt;
+}
