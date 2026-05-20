@@ -9,7 +9,7 @@ import lombok.Getter;
 import lombok.Setter;
 
 @Entity
-@Table(name = ""team"")
+@Table(name = "team")
 @Getter
 @Setter
 public class Team extends AuditableEntity {
@@ -17,10 +17,10 @@ public class Team extends AuditableEntity {
     private String description;
     
     @ManyToOne
-    @JoinColumn(name = ""organization_id"")
+    @JoinColumn(name = "organization_id")
     private Organization organization;
     
     @ManyToOne
-    @JoinColumn(name = ""manager_id"") // Lazy reference to Employee via ID
+    @JoinColumn(name = "manager_id") // Lazy reference to Employee via ID
     private com.aiworkforce.identity.entity.Employee manager;
 }

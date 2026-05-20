@@ -7,7 +7,7 @@ import lombok.Setter;
 import java.util.Set;
 
 @Entity
-@Table(name = ""role"")
+@Table(name = "role")
 @Getter
 @Setter
 public class Role extends AuditableEntity {
@@ -19,9 +19,9 @@ public class Role extends AuditableEntity {
     
     @ManyToMany(fetch = FetchType.EAGER)
     @JoinTable(
-        name = ""role_permission"",
-        joinColumns = @JoinColumn(name = ""role_id""),
-        inverseJoinColumns = @JoinColumn(name = ""permission_id"")
+        name = "role_permission",
+        joinColumns = @JoinColumn(name = "role_id"),
+        inverseJoinColumns = @JoinColumn(name = "permission_id")
     )
     private Set<Permission> permissions;
 }

@@ -2,17 +2,18 @@
 
 CREATE TABLE permission (
     id UUID PRIMARY KEY,
-    name VARCHAR(100) UNIQUE NOT NULL,
-    module VARCHAR(50),
-    action VARCHAR(20),
+    name VARCHAR(255) UNIQUE NOT NULL,
     description VARCHAR(255)
 );
 
 CREATE TABLE role (
     id UUID PRIMARY KEY,
-    name VARCHAR(50) UNIQUE NOT NULL,
+    name VARCHAR(255) UNIQUE NOT NULL,
     description VARCHAR(255),
-    is_system BOOLEAN DEFAULT TRUE
+    created_at TIMESTAMP,
+    updated_at TIMESTAMP,
+    created_by VARCHAR(255),
+    updated_by VARCHAR(255)
 );
 
 CREATE TABLE role_permission (
@@ -21,79 +22,128 @@ CREATE TABLE role_permission (
     PRIMARY KEY (role_id, permission_id)
 );
 
-CREATE TABLE organization (
-    id UUID PRIMARY KEY,
-    name VARCHAR(200) NOT NULL,
-    domain VARCHAR(100),
-    industry VARCHAR(100),
-    created_at TIMESTAMP NOT NULL,
-    updated_at TIMESTAMP,
-    created_by VARCHAR(100),
-    updated_by VARCHAR(100)
-);
-
 CREATE TABLE account (
     id UUID PRIMARY KEY,
-    username VARCHAR(255) UNIQUE NOT NULL,
     email VARCHAR(255) UNIQUE NOT NULL,
-    password_hash VARCHAR(255) NOT NULL,
-    role_id UUID NOT NULL REFERENCES role(id),
-    is_active BOOLEAN DEFAULT TRUE,
-    is_locked BOOLEAN DEFAULT FALSE,
-    failed_login_attempts INT DEFAULT 0,
-    locked_until TIMESTAMP,
-    refresh_token VARCHAR(500),
-    refresh_token_expiry TIMESTAMP,
-    last_login_at TIMESTAMP,
-    last_login_ip VARCHAR(45),
-    created_at TIMESTAMP NOT NULL,
+    password VARCHAR(255) NOT NULL,
+    active BOOLEAN NOT NULL DEFAULT TRUE,
+    locked BOOLEAN NOT NULL DEFAULT FALSE,
+    failed_login_attempts INT NOT NULL DEFAULT 0,
+    role_id UUID REFERENCES role(id),
+    created_at TIMESTAMP,
     updated_at TIMESTAMP,
-    created_by VARCHAR(100),
-    updated_by VARCHAR(100)
+    created_by VARCHAR(255),
+    updated_by VARCHAR(255)
+);
+
+CREATE TABLE organization (
+    id UUID PRIMARY KEY,
+    name VARCHAR(255),
+    domain VARCHAR(255),
+    logo_url VARCHAR(255),
+    created_at TIMESTAMP,
+    updated_at TIMESTAMP,
+    created_by VARCHAR(255),
+    updated_by VARCHAR(255)
 );
 
 CREATE TABLE employee (
     id UUID PRIMARY KEY,
-    account_id UUID NOT NULL UNIQUE REFERENCES account(id),
-    full_name VARCHAR(200) NOT NULL,
-    position VARCHAR(100),
-    department VARCHAR(100),
-    organization_id UUID REFERENCES organization(id),
-    is_active BOOLEAN DEFAULT TRUE,
-    created_at TIMESTAMP NOT NULL,
+    first_name VARCHAR(255),
+    last_name VARCHAR(255),
+    job_title VARCHAR(255),
+    phone_number VARCHAR(255),
+    account_id UUID NOT NULL REFERENCES account(id),
+    team_id UUID, -- Foreign key added later to avoid circular dependency if needed, but we can declare it here as Team is created below. Wait! Team references Employee (manager_id). So we have a circular reference.
+    created_at TIMESTAMP,
     updated_at TIMESTAMP,
-    created_by VARCHAR(100),
-    updated_by VARCHAR(100)
+    created_by VARCHAR(255),
+    updated_by VARCHAR(255)
 );
+
+CREATE TABLE team (
+    id UUID PRIMARY KEY,
+    name VARCHAR(255),
+    description VARCHAR(255),
+    organization_id UUID REFERENCES organization(id),
+    manager_id UUID REFERENCES employee(id),
+    created_at TIMESTAMP,
+    updated_at TIMESTAMP,
+    created_by VARCHAR(255),
+    updated_by VARCHAR(255)
+);
+
+-- Now add the foreign key for team_id on employee
+ALTER TABLE employee ADD CONSTRAINT fk_employee_team FOREIGN KEY (team_id) REFERENCES team(id);
 
 CREATE TABLE task (
     id UUID PRIMARY KEY,
-    title VARCHAR(255) NOT NULL,
+    title VARCHAR(255),
     description TEXT,
-    status VARCHAR(50) NOT NULL,
-    priority VARCHAR(50) NOT NULL,
+    status VARCHAR(255),
+    priority VARCHAR(255),
     due_date TIMESTAMP,
-    assignee_id UUID REFERENCES employee(id),
-    creator_id UUID REFERENCES employee(id),
     estimated_hours INT,
-    actual_hours INT,
-    created_at TIMESTAMP NOT NULL,
+    assignee_id UUID REFERENCES employee(id),
+    reporter_id UUID REFERENCES employee(id),
+    created_at TIMESTAMP,
     updated_at TIMESTAMP,
-    created_by VARCHAR(100),
-    updated_by VARCHAR(100)
+    created_by VARCHAR(255),
+    updated_by VARCHAR(255)
 );
 
 CREATE TABLE workload_event (
     id UUID PRIMARY KEY,
-    type VARCHAR(50) NOT NULL,
+    event_type VARCHAR(255),
+    event_details VARCHAR(255),
+    impact_score INT,
     employee_id UUID REFERENCES employee(id),
-    entity_type VARCHAR(50),
-    entity_id VARCHAR(50),
-    metadata TEXT,
-    timestamp TIMESTAMP NOT NULL
+    task_id UUID REFERENCES task(id),
+    created_at TIMESTAMP,
+    updated_at TIMESTAMP,
+    created_by VARCHAR(255),
+    updated_by VARCHAR(255)
+);
+
+CREATE TABLE ai_insight (
+    id UUID PRIMARY KEY,
+    summary VARCHAR(255),
+    full_analysis TEXT,
+    severity VARCHAR(255),
+    employee_id UUID REFERENCES employee(id),
+    created_at TIMESTAMP,
+    updated_at TIMESTAMP,
+    created_by VARCHAR(255),
+    updated_by VARCHAR(255)
+);
+
+CREATE TABLE leave_request (
+    id UUID PRIMARY KEY,
+    reason VARCHAR(255),
+    start_date DATE,
+    end_date DATE,
+    status VARCHAR(255),
+    employee_id UUID REFERENCES employee(id),
+    created_at TIMESTAMP,
+    updated_at TIMESTAMP,
+    created_by VARCHAR(255),
+    updated_by VARCHAR(255)
+);
+
+CREATE TABLE attendance (
+    id UUID PRIMARY KEY,
+    check_in_date DATE,
+    check_in_time TIME,
+    check_out_time TIME,
+    status VARCHAR(255),
+    employee_id UUID REFERENCES employee(id),
+    created_at TIMESTAMP,
+    updated_at TIMESTAMP,
+    created_by VARCHAR(255),
+    updated_by VARCHAR(255)
 );
 
 -- Seed Initial Roles
-INSERT INTO role (id, name, description) VALUES (gen_random_uuid(), 'ADMIN', 'Full system access');
-INSERT INTO role (id, name, description) VALUES (gen_random_uuid(), 'MANAGER', 'Team and workforce management');
-INSERT INTO role (id, name, description) VALUES (gen_random_uuid(), 'EMPLOYEE', 'Standard user access');
+INSERT INTO role (id, name, description, created_at) VALUES (gen_random_uuid(), 'ADMIN', 'Full system access', CURRENT_TIMESTAMP);
+INSERT INTO role (id, name, description, created_at) VALUES (gen_random_uuid(), 'MANAGER', 'Team and workforce management', CURRENT_TIMESTAMP);
+INSERT INTO role (id, name, description, created_at) VALUES (gen_random_uuid(), 'EMPLOYEE', 'Standard user access', CURRENT_TIMESTAMP);

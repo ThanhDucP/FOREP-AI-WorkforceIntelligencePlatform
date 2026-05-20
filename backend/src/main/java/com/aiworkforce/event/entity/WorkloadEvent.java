@@ -8,7 +8,7 @@ import lombok.Getter;
 import lombok.Setter;
 
 @Entity
-@Table(name = ""workload_event"")
+@Table(name = "workload_event")
 @Getter
 @Setter
 public class WorkloadEvent extends AuditableEntity {
@@ -21,10 +21,10 @@ public class WorkloadEvent extends AuditableEntity {
     private int impactScore; // Used for analytics
     
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = ""employee_id"")
+    @JoinColumn(name = "employee_id")
     private Employee employee;
     
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = ""task_id"")
+    @JoinColumn(name = "task_id")
     private Task task;
 }

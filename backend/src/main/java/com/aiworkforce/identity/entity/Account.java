@@ -5,7 +5,7 @@ import lombok.Getter;
 import lombok.Setter;
 
 @Entity
-@Table(name = ""account"")
+@Table(name = "account")
 @Getter
 @Setter
 public class Account extends AuditableEntity {
@@ -20,6 +20,6 @@ public class Account extends AuditableEntity {
     private int failedLoginAttempts = 0;
     
     @ManyToOne(fetch = FetchType.EAGER)
-    @JoinColumn(name = ""role_id"")
+    @JoinColumn(name = "role_id")
     private Role role;
 }

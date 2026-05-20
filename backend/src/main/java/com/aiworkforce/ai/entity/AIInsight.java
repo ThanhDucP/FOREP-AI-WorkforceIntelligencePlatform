@@ -7,20 +7,20 @@ import lombok.Getter;
 import lombok.Setter;
 
 @Entity
-@Table(name = ""ai_insight"")
+@Table(name = "ai_insight")
 @Getter
 @Setter
 public class AIInsight extends AuditableEntity {
     
     private String summary;
     
-    @Column(columnDefinition = ""TEXT"")
+    @Column(columnDefinition = "TEXT")
     private String fullAnalysis;
     
     @Enumerated(EnumType.STRING)
     private InsightSeverity severity;
     
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = ""employee_id"")
+    @JoinColumn(name = "employee_id")
     private Employee employee;
 }

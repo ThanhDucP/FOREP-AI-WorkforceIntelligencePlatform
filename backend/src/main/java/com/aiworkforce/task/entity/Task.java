@@ -9,13 +9,13 @@ import lombok.Setter;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = ""task"")
+@Table(name = "task")
 @Getter
 @Setter
 public class Task extends AuditableEntity {
     private String title;
     
-    @Column(columnDefinition = ""TEXT"")
+    @Column(columnDefinition = "TEXT")
     private String description;
     
     @Enumerated(EnumType.STRING)
@@ -29,10 +29,10 @@ public class Task extends AuditableEntity {
     private int estimatedHours;
     
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = ""assignee_id"")
+    @JoinColumn(name = "assignee_id")
     private Employee assignee;
     
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = ""reporter_id"")
+    @JoinColumn(name = "reporter_id")
     private Employee reporter;
 }

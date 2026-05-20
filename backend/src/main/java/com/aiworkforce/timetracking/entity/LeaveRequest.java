@@ -8,7 +8,7 @@ import lombok.Setter;
 import java.time.LocalDate;
 
 @Entity
-@Table(name = ""leave_request"")
+@Table(name = "leave_request")
 @Getter
 @Setter
 public class LeaveRequest extends AuditableEntity {
@@ -20,6 +20,6 @@ public class LeaveRequest extends AuditableEntity {
     private LeaveStatus status;
     
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = ""employee_id"")
+    @JoinColumn(name = "employee_id")
     private Employee employee;
 }

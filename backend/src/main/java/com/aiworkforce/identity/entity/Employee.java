@@ -7,7 +7,7 @@ import lombok.Getter;
 import lombok.Setter;
 
 @Entity
-@Table(name = ""employee"")
+@Table(name = "employee")
 @Getter
 @Setter
 public class Employee extends AuditableEntity {
@@ -17,10 +17,10 @@ public class Employee extends AuditableEntity {
     private String phoneNumber;
     
     @OneToOne
-    @JoinColumn(name = ""account_id"", nullable = false)
+    @JoinColumn(name = "account_id", nullable = false)
     private Account account;
     
     @ManyToOne
-    @JoinColumn(name = ""team_id"")
+    @JoinColumn(name = "team_id")
     private Team team;
 }

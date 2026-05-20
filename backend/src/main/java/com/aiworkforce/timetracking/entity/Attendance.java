@@ -9,7 +9,7 @@ import java.time.LocalDate;
 import java.time.LocalTime;
 
 @Entity
-@Table(name = ""attendance"")
+@Table(name = "attendance")
 @Getter
 @Setter
 public class Attendance extends AuditableEntity {
@@ -21,6 +21,6 @@ public class Attendance extends AuditableEntity {
     private AttendanceStatus status;
     
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = ""employee_id"")
+    @JoinColumn(name = "employee_id")
     private Employee employee;
 }

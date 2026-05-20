@@ -7,7 +7,7 @@ import lombok.Getter;
 import lombok.Setter;
 
 @Entity
-@Table(name = ""permission"")
+@Table(name = "permission")
 @Getter
 @Setter
 public class Permission extends BaseEntity {
