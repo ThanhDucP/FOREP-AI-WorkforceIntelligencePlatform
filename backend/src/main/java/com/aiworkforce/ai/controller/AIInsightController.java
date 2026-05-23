@@ -29,4 +29,27 @@ public class AIInsightController {
     public ResponseEntity<ApiResponse<List<AIInsight>>> getInsights(@PathVariable UUID employeeId) {
         return ResponseEntity.ok(ApiResponse.success(aiInsightService.getInsightsForEmployee(employeeId)));
     }
+
+    @GetMapping("/insights/my-insights")
+    public ResponseEntity<ApiResponse<List<AIInsight>>> getMyInsights() {
+        return ResponseEntity.ok(ApiResponse.success(aiInsightService.getMyInsights()));
+    }
+
+    @GetMapping("/insights/team/{teamId}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
+    public ResponseEntity<ApiResponse<List<AIInsight>>> getTeamInsights(@PathVariable UUID teamId) {
+        return ResponseEntity.ok(ApiResponse.success(aiInsightService.getInsightsForTeam(teamId)));
+    }
+
+    @GetMapping("/insights/managed-teams")
+    @PreAuthorize("hasRole('MANAGER')")
+    public ResponseEntity<ApiResponse<List<AIInsight>>> getManagedTeamInsights() {
+        return ResponseEntity.ok(ApiResponse.success(aiInsightService.getInsightsForManagedTeams()));
+    }
+
+    @GetMapping("/insights/organization/{organizationId}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
+    public ResponseEntity<ApiResponse<List<AIInsight>>> getOrganizationInsights(@PathVariable UUID organizationId) {
+        return ResponseEntity.ok(ApiResponse.success(aiInsightService.getInsightsForOrganization(organizationId)));
+    }
 }

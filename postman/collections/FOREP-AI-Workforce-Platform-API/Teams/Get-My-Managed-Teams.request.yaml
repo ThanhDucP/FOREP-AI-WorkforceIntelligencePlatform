@@ -1,0 +1,18 @@
+$kind: http-request
+name: Get My Managed Teams
+method: GET
+url: '{{base_url}}/api/v1/teams/my-managed-teams'
+order: 1090
+headers:
+  - key: Authorization
+    value: 'Bearer {{jwt_token}}'
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test("Status 200 OK", function () {
+        pm.response.to.have.status(200);
+      });
+      pm.test("Teams response is array", function () {
+        pm.expect(pm.response.json().data).to.be.an("array");
+      });

@@ -45,6 +45,8 @@ public class EmployeeService {
         employee.setLastName(request.getLastName());
         employee.setJobTitle(request.getJobTitle());
         employee.setPhoneNumber(request.getPhoneNumber());
+        employee.setDepartment(request.getDepartment());
+        employee.setAvatarInitials(request.getAvatarInitials());
 
         if (request.getTeamId() != null) {
             Team team = teamRepository.findById(request.getTeamId())
@@ -63,6 +65,22 @@ public class EmployeeService {
                 .collect(Collectors.toList());
     }
 
+    public List<EmployeeResponse> getEmployeesByTeam(UUID teamId) {
+        if (!teamRepository.existsById(teamId)) {
+            throw new ResourceNotFoundException("Team not found with id: " + teamId);
+        }
+
+        return employeeRepository.findByTeamId(teamId).stream()
+                .map(this::mapToResponse)
+                .collect(Collectors.toList());
+    }
+
+    public List<EmployeeResponse> getEmployeesByOrganization(UUID organizationId) {
+        return employeeRepository.findByTeamOrganizationId(organizationId).stream()
+                .map(this::mapToResponse)
+                .collect(Collectors.toList());
+    }
+
     public EmployeeResponse getEmployeeById(UUID id) {
         Employee employee = employeeRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Employee not found with id: " + id));
@@ -77,6 +95,8 @@ public class EmployeeService {
         employee.setLastName(request.getLastName());
         employee.setJobTitle(request.getJobTitle());
         employee.setPhoneNumber(request.getPhoneNumber());
+        employee.setDepartment(request.getDepartment());
+        employee.setAvatarInitials(request.getAvatarInitials());
 
         if (request.getTeamId() != null) {
             Team team = teamRepository.findById(request.getTeamId())
@@ -107,6 +127,18 @@ public class EmployeeService {
                 .email(employee.getAccount() != null ? employee.getAccount().getEmail() : null)
                 .teamId(employee.getTeam() != null ? employee.getTeam().getId() : null)
                 .teamName(employee.getTeam() != null ? employee.getTeam().getName() : null)
+                .role(employee.getAccount() != null && employee.getAccount().getRole() != null ? employee.getAccount().getRole().getName().name() : null)
+                .department(employee.getDepartment())
+                .avatarInitials(employee.getAvatarInitials())
+                .workloadScore(employee.getWorkloadScore())
+                .burnoutRisk(employee.getBurnoutRisk() != null ? employee.getBurnoutRisk().name() : null)
+                .contributionScore(employee.getContributionScore())
+                .overdueRatio(employee.getOverdueRatio())
+                .outOfHoursPct(employee.getOutOfHoursPct())
+                .avgCycleTimeDays(employee.getAvgCycleTimeDays())
+                .tasksShippedThisMonth(employee.getTasksShippedThisMonth())
+                .streakDays(employee.getStreakDays())
+                .focusScore(employee.getFocusScore())
                 .build();
     }
 }

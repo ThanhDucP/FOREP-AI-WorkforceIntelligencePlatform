@@ -1,0 +1,39 @@
+$kind: http-request
+name: 'Update Team (Admin Only)'
+method: PUT
+url: '{{base_url}}/api/v1/teams/{{team_id}}'
+order: 4000
+headers:
+  - key: Authorization
+    value: 'Bearer {{jwt_token}}'
+  - key: Content-Type
+    value: application/json
+body:
+  type: json
+  content: |-
+    {
+      "name": "Engineering Team Updated",
+      "description": "Updated description for engineering team",
+      "organizationId": "{{organization_id}}",
+      "managerId": "{{employee_id}}"
+    }
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test("Status code is 200", function () {
+          pm.response.to.have.status(200);
+      });
+
+      pm.test("Response has success structure", function () {
+          const json = pm.response.json();
+          pm.expect(json).to.have.property("success", true);
+          pm.expect(json).to.have.property("data");
+      });
+
+      pm.test("Updated team has correct name", function () {
+          const team = pm.response.json().data;
+          pm.expect(team).to.have.property("id");
+          pm.expect(team).to.have.property("name");
+          pm.expect(team.name).to.eql("Engineering Team Updated");
+      });

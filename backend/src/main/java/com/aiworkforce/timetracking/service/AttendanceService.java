@@ -5,6 +5,8 @@ import com.aiworkforce.core.exception.BusinessException;
 import com.aiworkforce.core.exception.ResourceNotFoundException;
 import com.aiworkforce.identity.entity.Employee;
 import com.aiworkforce.identity.entity.Organization;
+import com.aiworkforce.identity.entity.Team;
+import com.aiworkforce.identity.repository.TeamRepository;
 import com.aiworkforce.identity.service.EmployeeService;
 import com.aiworkforce.timetracking.dto.AttendanceRequest;
 import com.aiworkforce.timetracking.dto.AttendanceResponse;
@@ -28,6 +30,7 @@ public class AttendanceService {
 
     private final AttendanceRepository attendanceRepository;
     private final EmployeeService employeeService;
+    private final TeamRepository teamRepository;
 
     @Transactional
     public AttendanceResponse checkIn(AttendanceRequest request) {
@@ -89,6 +92,33 @@ public class AttendanceService {
 
     public List<AttendanceResponse> getEmployeeAttendanceHistory(UUID employeeId) {
         return attendanceRepository.findByEmployeeId(employeeId).stream()
+                .map(this::mapToResponse)
+                .collect(Collectors.toList());
+    }
+
+    public List<AttendanceResponse> getTeamAttendanceHistory(UUID teamId) {
+        return attendanceRepository.findByEmployeeTeamId(teamId).stream()
+                .map(this::mapToResponse)
+                .collect(Collectors.toList());
+    }
+
+    public List<AttendanceResponse> getManagedTeamAttendanceHistory() {
+        Employee currentEmployee = employeeService.getCurrentEmployee();
+        List<UUID> teamIds = teamRepository.findByManagerId(currentEmployee.getId()).stream()
+                .map(Team::getId)
+                .collect(Collectors.toList());
+
+        if (teamIds.isEmpty()) {
+            return List.of();
+        }
+
+        return attendanceRepository.findByEmployeeTeamIdIn(teamIds).stream()
+                .map(this::mapToResponse)
+                .collect(Collectors.toList());
+    }
+
+    public List<AttendanceResponse> getOrganizationAttendanceHistory(UUID organizationId) {
+        return attendanceRepository.findByEmployeeTeamOrganizationId(organizationId).stream()
                 .map(this::mapToResponse)
                 .collect(Collectors.toList());
     }

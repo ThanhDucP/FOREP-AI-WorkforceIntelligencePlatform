@@ -18,6 +18,9 @@ public class Account extends AuditableEntity {
     private boolean active = true;
     private boolean locked = false;
     private int failedLoginAttempts = 0;
+    private String avatarUrl;
+    private String timezone;
+    private Double focusScore;
     
     @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "role_id")

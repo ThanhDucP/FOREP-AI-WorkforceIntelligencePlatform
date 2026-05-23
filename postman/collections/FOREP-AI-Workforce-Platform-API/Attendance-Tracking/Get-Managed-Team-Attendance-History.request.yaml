@@ -1,0 +1,18 @@
+$kind: http-request
+name: Get Managed Team Attendance History
+method: GET
+url: '{{base_url}}/api/v1/attendance/managed-teams'
+order: 4070
+headers:
+  - key: Authorization
+    value: 'Bearer {{jwt_token}}'
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test("Status 200 OK", function () {
+        pm.response.to.have.status(200);
+      });
+      pm.test("Attendance response is array", function () {
+        pm.expect(pm.response.json().data).to.be.an("array");
+      });

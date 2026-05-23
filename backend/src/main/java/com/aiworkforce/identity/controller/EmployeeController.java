@@ -36,6 +36,18 @@ public class EmployeeController {
         return ResponseEntity.ok(ApiResponse.success(employeeService.getAllEmployees()));
     }
 
+    @GetMapping("/team/{teamId}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
+    public ResponseEntity<ApiResponse<List<EmployeeResponse>>> getEmployeesByTeam(@PathVariable UUID teamId) {
+        return ResponseEntity.ok(ApiResponse.success(employeeService.getEmployeesByTeam(teamId)));
+    }
+
+    @GetMapping("/organization/{organizationId}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
+    public ResponseEntity<ApiResponse<List<EmployeeResponse>>> getEmployeesByOrganization(@PathVariable UUID organizationId) {
+        return ResponseEntity.ok(ApiResponse.success(employeeService.getEmployeesByOrganization(organizationId)));
+    }
+
     @GetMapping("/{id}")
     @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER') or @employeeService.getCurrentEmployee().getId().equals(#id)")
     public ResponseEntity<ApiResponse<EmployeeResponse>> getEmployeeById(@PathVariable UUID id) {

@@ -22,4 +22,6 @@ public class EmployeeRequest {
     private String jobTitle;
     private String phoneNumber;
     private UUID teamId;
+    private String department;
+    private String avatarInitials;
 }

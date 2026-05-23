@@ -17,4 +17,5 @@ public class Organization extends AuditableEntity {
     private Double latitude;
     private Double longitude;
     private Integer allowedRadiusMeters;
+    private Integer currentSprintNumber;
 }

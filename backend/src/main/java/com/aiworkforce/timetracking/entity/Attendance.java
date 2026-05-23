@@ -16,10 +16,16 @@ public class Attendance extends AuditableEntity {
     private LocalDate checkInDate;
     private LocalTime checkInTime;
     private LocalTime checkOutTime;
-    
+
+    /** Total hours worked (checkOut - checkIn) */
+    private Double workHoursTotal;
+
+    /** Location string from GPS reverse-geocode e.g. "San Francisco HQ" */
+    private String checkInLocation;
+
     @Enumerated(EnumType.STRING)
     private AttendanceStatus status;
-    
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "employee_id")
     private Employee employee;

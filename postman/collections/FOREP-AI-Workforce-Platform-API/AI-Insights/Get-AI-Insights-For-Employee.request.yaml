@@ -1,0 +1,19 @@
+$kind: http-request
+name: Get AI Insights For Employee
+method: GET
+url: '{{base_url}}/api/v1/ai/insights/{{employee_id}}'
+order: 2000
+headers:
+  - key: Authorization
+    value: 'Bearer {{jwt_token}}'
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test("Status 200 OK", function () {
+        pm.response.to.have.status(200);
+      });
+      pm.test("Response has insights data", function () {
+        var json = pm.response.json();
+        pm.expect(json.data).to.exist;
+      });

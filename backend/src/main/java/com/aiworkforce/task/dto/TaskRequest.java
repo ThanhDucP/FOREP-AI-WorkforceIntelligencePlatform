@@ -12,4 +12,10 @@ public class TaskRequest {
     private LocalDateTime dueDate;
     private int estimatedHours;
     private UUID assigneeId;
+    private UUID reporterId;
+    private UUID teamId;
+    private UUID sprintId;
+    private String externalTicketRef;
+    private Integer sprintNumber;
+    private Integer storyPoints;
 }

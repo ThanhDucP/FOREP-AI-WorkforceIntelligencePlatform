@@ -1,10 +1,6 @@
 package com.aiworkforce.identity.entity;
 import com.aiworkforce.core.base.AuditableEntity;
-import com.aiworkforce.identity.entity.Organization;
-import jakarta.persistence.Entity;
-import jakarta.persistence.JoinColumn;
-import jakarta.persistence.ManyToOne;
-import jakarta.persistence.Table;
+import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -15,12 +11,18 @@ import lombok.Setter;
 public class Team extends AuditableEntity {
     private String name;
     private String description;
-    
+
+    /** Percentage of team capacity currently utilized (0.0–100.0) */
+    private Double capacityUsedPct;
+
+    /** Overall team utilization/efficiency score (0.0–100.0) */
+    private Double utilizationScore;
+
     @ManyToOne
     @JoinColumn(name = "organization_id")
     private Organization organization;
-    
+
     @ManyToOne
-    @JoinColumn(name = "manager_id") // Lazy reference to Employee via ID
-    private com.aiworkforce.identity.entity.Employee manager;
+    @JoinColumn(name = "manager_id")
+    private Employee manager;
 }

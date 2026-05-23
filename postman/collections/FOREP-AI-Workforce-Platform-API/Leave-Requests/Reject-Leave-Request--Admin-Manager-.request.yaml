@@ -1,0 +1,15 @@
+$kind: http-request
+name: Reject Leave Request (Admin/Manager)
+method: PUT
+url: '{{base_url}}/api/v1/leaves/{{leave_id}}/reject'
+order: 6090
+headers:
+  - key: Authorization
+    value: 'Bearer {{jwt_token}}'
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test("Status 200 OK", function () {
+        pm.response.to.have.status(200);
+      });

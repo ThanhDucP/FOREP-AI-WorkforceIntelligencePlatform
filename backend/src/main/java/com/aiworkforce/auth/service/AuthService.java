@@ -15,6 +15,7 @@ import com.aiworkforce.security.jwt.JwtService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.User;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -40,13 +41,24 @@ public class AuthService {
             throw new BusinessException("Email already in use");
         }
 
-        Role employeeRole = roleRepository.findByName(RoleType.EMPLOYEE)
-                .orElseThrow(() -> new BusinessException("Default role not found"));
+        Role targetRole = null;
+        if (request.getRole() != null && !request.getRole().trim().isEmpty()) {
+            try {
+                RoleType roleType = RoleType.valueOf(request.getRole().trim().toUpperCase());
+                targetRole = roleRepository.findByName(roleType).orElse(null);
+            } catch (IllegalArgumentException e) {
+                // Ignore invalid role name and fall back
+            }
+        }
+        if (targetRole == null) {
+            targetRole = roleRepository.findByName(RoleType.EMPLOYEE)
+                    .orElseThrow(() -> new BusinessException("Default role not found"));
+        }
 
         Account account = new Account();
         account.setEmail(request.getEmail());
         account.setPassword(passwordEncoder.encode(request.getPassword()));
-        account.setRole(employeeRole);
+        account.setRole(targetRole);
         account.setActive(true);
         account.setLocked(false);
         Account savedAccount = accountRepository.save(account);
@@ -57,13 +69,18 @@ public class AuthService {
         employee.setLastName(request.getLastName());
         employeeRepository.save(employee);
 
-        UserDetails userDetails = new User(account.getEmail(), account.getPassword(), Collections.emptyList());
+        UserDetails userDetails = new User(
+                account.getEmail(), 
+                account.getPassword(), 
+                Collections.singletonList(new SimpleGrantedAuthority("ROLE_" + account.getRole().getName().name()))
+        );
         String jwtToken = jwtService.generateToken(userDetails);
         
         return AuthResponse.builder()
                 .token(jwtToken)
                 .refreshToken(jwtToken) // Optional: Generate distinct refresh token
                 .type("Bearer")
+                .role(account.getRole().getName().name())
                 .build();
     }
 
@@ -81,13 +98,19 @@ public class AuthService {
             accountRepository.save(account);
         }
 
-        UserDetails userDetails = new User(account.getEmail(), account.getPassword(), Collections.emptyList());
+        UserDetails userDetails = new User(
+                account.getEmail(), 
+                account.getPassword(), 
+                Collections.singletonList(new SimpleGrantedAuthority("ROLE_" + account.getRole().getName().name()))
+        );
         String jwtToken = jwtService.generateToken(userDetails);
         
         return AuthResponse.builder()
                 .token(jwtToken)
                 .refreshToken(jwtToken)
                 .type("Bearer")
+                .role(account.getRole().getName().name())
                 .build();
     }
+
 }

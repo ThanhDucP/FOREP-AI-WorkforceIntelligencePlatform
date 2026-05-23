@@ -1,6 +1,7 @@
 package com.aiworkforce.timetracking.controller;
 
 import com.aiworkforce.core.response.ApiResponse;
+import com.aiworkforce.core.enums.LeaveStatus;
 import com.aiworkforce.timetracking.dto.LeaveRequestRequest;
 import com.aiworkforce.timetracking.dto.LeaveRequestResponse;
 import com.aiworkforce.timetracking.service.LeaveRequestService;
@@ -42,6 +43,36 @@ public class LeaveRequestController {
     @GetMapping("/my-history")
     public ResponseEntity<ApiResponse<List<LeaveRequestResponse>>> getMyLeaveRequests() {
         return ResponseEntity.ok(ApiResponse.success(leaveRequestService.getMyLeaveRequests()));
+    }
+
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER') or @employeeService.getCurrentEmployee().getId().equals(#employeeId)")
+    @GetMapping("/employee/{employeeId}")
+    public ResponseEntity<ApiResponse<List<LeaveRequestResponse>>> getEmployeeLeaveRequests(@PathVariable UUID employeeId) {
+        return ResponseEntity.ok(ApiResponse.success(leaveRequestService.getEmployeeLeaveRequests(employeeId)));
+    }
+
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
+    @GetMapping("/team/{teamId}")
+    public ResponseEntity<ApiResponse<List<LeaveRequestResponse>>> getTeamLeaveRequests(@PathVariable UUID teamId) {
+        return ResponseEntity.ok(ApiResponse.success(leaveRequestService.getTeamLeaveRequests(teamId)));
+    }
+
+    @PreAuthorize("hasRole('MANAGER')")
+    @GetMapping("/managed-teams")
+    public ResponseEntity<ApiResponse<List<LeaveRequestResponse>>> getManagedTeamLeaveRequests() {
+        return ResponseEntity.ok(ApiResponse.success(leaveRequestService.getManagedTeamLeaveRequests()));
+    }
+
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
+    @GetMapping("/organization/{organizationId}")
+    public ResponseEntity<ApiResponse<List<LeaveRequestResponse>>> getOrganizationLeaveRequests(@PathVariable UUID organizationId) {
+        return ResponseEntity.ok(ApiResponse.success(leaveRequestService.getOrganizationLeaveRequests(organizationId)));
+    }
+
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
+    @GetMapping("/status/{status}")
+    public ResponseEntity<ApiResponse<List<LeaveRequestResponse>>> getLeaveRequestsByStatus(@PathVariable LeaveStatus status) {
+        return ResponseEntity.ok(ApiResponse.success(leaveRequestService.getLeaveRequestsByStatus(status)));
     }
 
     @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")

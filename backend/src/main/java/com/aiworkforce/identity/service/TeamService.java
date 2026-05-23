@@ -1,6 +1,7 @@
 package com.aiworkforce.identity.service;
 
 import com.aiworkforce.core.exception.ResourceNotFoundException;
+import com.aiworkforce.identity.dto.EmployeeResponse;
 import com.aiworkforce.identity.dto.TeamRequest;
 import com.aiworkforce.identity.dto.TeamResponse;
 import com.aiworkforce.identity.entity.Employee;
@@ -24,6 +25,7 @@ public class TeamService {
     private final TeamRepository teamRepository;
     private final EmployeeRepository employeeRepository;
     private final OrganizationRepository organizationRepository;
+    private final EmployeeService employeeService;
 
     public List<TeamResponse> getAllTeams() {
         return teamRepository.findAll().stream()
@@ -31,10 +33,41 @@ public class TeamService {
                 .collect(Collectors.toList());
     }
 
+    public List<TeamResponse> getTeamsByOrganization(UUID organizationId) {
+        return teamRepository.findByOrganizationId(organizationId).stream()
+                .map(this::mapToResponse)
+                .collect(Collectors.toList());
+    }
+
+    public List<TeamResponse> getTeamsByManager(UUID managerId) {
+        if (!employeeRepository.existsById(managerId)) {
+            throw new ResourceNotFoundException("Manager not found with id: " + managerId);
+        }
+
+        return teamRepository.findByManagerId(managerId).stream()
+                .map(this::mapToResponse)
+                .collect(Collectors.toList());
+    }
+
+    public List<TeamResponse> getMyManagedTeams() {
+        Employee currentEmployee = employeeService.getCurrentEmployee();
+        return getTeamsByManager(currentEmployee.getId());
+    }
+
     public TeamResponse getTeamById(UUID id) {
         Team team = teamRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Team not found with id: " + id));
         return mapToResponse(team);
+    }
+
+    public List<EmployeeResponse> getTeamMembers(UUID id) {
+        if (!teamRepository.existsById(id)) {
+            throw new ResourceNotFoundException("Team not found with id: " + id);
+        }
+
+        return employeeRepository.findByTeamId(id).stream()
+                .map(employeeService::mapToResponse)
+                .collect(Collectors.toList());
     }
 
     @Transactional

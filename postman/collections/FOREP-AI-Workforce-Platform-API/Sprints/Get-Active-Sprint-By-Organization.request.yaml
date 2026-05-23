@@ -1,0 +1,15 @@
+$kind: http-request
+name: Get Active Sprint By Organization
+method: GET
+url: '{{base_url}}/api/v1/sprints/organization/{{organization_id}}/active'
+order: 5040
+headers:
+  - key: Authorization
+    value: 'Bearer {{jwt_token}}'
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test("Status 200 OK", function () {
+        pm.response.to.have.status(200);
+      });

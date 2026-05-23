@@ -20,4 +20,17 @@ public class EmployeeResponse {
     private String email;
     private UUID teamId;
     private String teamName;
+    private String role;
+    private String department;
+    private String avatarInitials;
+    private Double workloadScore;
+    private String burnoutRisk;
+    private Double contributionScore;
+    private Double overdueRatio;
+    private Double outOfHoursPct;
+    private Double avgCycleTimeDays;
+    private Integer tasksShippedThisMonth;
+    private Integer streakDays;
+    private Double focusScore;
 }
+

@@ -5,6 +5,8 @@ import com.aiworkforce.core.enums.LeaveStatus;
 import com.aiworkforce.core.exception.BusinessException;
 import com.aiworkforce.core.exception.ResourceNotFoundException;
 import com.aiworkforce.identity.entity.Employee;
+import com.aiworkforce.identity.entity.Team;
+import com.aiworkforce.identity.repository.TeamRepository;
 import com.aiworkforce.identity.service.EmployeeService;
 import com.aiworkforce.event.entity.WorkloadEvent;
 import com.aiworkforce.event.publisher.EventPublisher;
@@ -28,6 +30,7 @@ public class LeaveRequestService {
 
     private final LeaveRequestRepository leaveRequestRepository;
     private final EmployeeService employeeService;
+    private final TeamRepository teamRepository;
     private final EventPublisher eventPublisher;
 
     @Transactional
@@ -91,6 +94,41 @@ public class LeaveRequestService {
     public List<LeaveRequestResponse> getMyLeaveRequests() {
         Employee employee = employeeService.getCurrentEmployee();
         return leaveRequestRepository.findByEmployeeId(employee.getId()).stream()
+                .map(this::mapToResponse)
+                .collect(Collectors.toList());
+    }
+
+    public List<LeaveRequestResponse> getEmployeeLeaveRequests(UUID employeeId) {
+        return leaveRequestRepository.findByEmployeeId(employeeId).stream()
+                .map(this::mapToResponse)
+                .collect(Collectors.toList());
+    }
+
+    public List<LeaveRequestResponse> getTeamLeaveRequests(UUID teamId) {
+        return leaveRequestRepository.findByEmployeeTeamId(teamId).stream()
+                .map(this::mapToResponse)
+                .collect(Collectors.toList());
+    }
+
+    public List<LeaveRequestResponse> getManagedTeamLeaveRequests() {
+        Employee currentEmployee = employeeService.getCurrentEmployee();
+        List<UUID> teamIds = teamRepository.findByManagerId(currentEmployee.getId()).stream()
+                .map(Team::getId)
+                .collect(Collectors.toList());
+
+        return leaveRequestRepository.findByEmployeeTeamIdIn(teamIds).stream()
+                .map(this::mapToResponse)
+                .collect(Collectors.toList());
+    }
+
+    public List<LeaveRequestResponse> getOrganizationLeaveRequests(UUID organizationId) {
+        return leaveRequestRepository.findByEmployeeTeamOrganizationId(organizationId).stream()
+                .map(this::mapToResponse)
+                .collect(Collectors.toList());
+    }
+
+    public List<LeaveRequestResponse> getLeaveRequestsByStatus(LeaveStatus status) {
+        return leaveRequestRepository.findByStatus(status).stream()
                 .map(this::mapToResponse)
                 .collect(Collectors.toList());
     }

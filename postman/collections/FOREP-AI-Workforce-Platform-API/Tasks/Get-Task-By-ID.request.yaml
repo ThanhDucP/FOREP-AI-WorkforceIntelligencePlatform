@@ -1,0 +1,19 @@
+$kind: http-request
+name: Get Task By ID
+method: GET
+url: '{{base_url}}/api/v1/tasks/{{task_id}}'
+order: 2000
+headers:
+  - key: Authorization
+    value: 'Bearer {{jwt_token}}'
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test("Status 200 OK", function () {
+        pm.response.to.have.status(200);
+      });
+      pm.test("Task has title", function () {
+        var json = pm.response.json();
+        pm.expect(json.data).to.have.property("title");
+      });

@@ -80,6 +80,34 @@ public class AuthServiceTest {
 
         assertNotNull(response);
         assertEquals("jwt-token", response.getToken());
+        assertEquals("EMPLOYEE", response.getRole());
+        verify(accountRepository, times(1)).save(any(Account.class));
+        verify(employeeRepository, times(1)).save(any());
+    }
+
+    @Test
+    public void testRegister_CustomRole_Success() {
+        registerRequest.setRole("ADMIN");
+        Role adminRole = new Role();
+        adminRole.setName(RoleType.ADMIN);
+
+        when(accountRepository.existsByEmail(registerRequest.getEmail())).thenReturn(false);
+        when(roleRepository.findByName(RoleType.ADMIN)).thenReturn(Optional.of(adminRole));
+        when(passwordEncoder.encode(registerRequest.getPassword())).thenReturn("hashedPassword");
+        
+        Account savedAccount = new Account();
+        savedAccount.setEmail(registerRequest.getEmail());
+        savedAccount.setPassword("hashedPassword");
+        savedAccount.setRole(adminRole);
+        
+        when(accountRepository.save(any(Account.class))).thenReturn(savedAccount);
+        when(jwtService.generateToken(any(UserDetails.class))).thenReturn("jwt-token");
+
+        AuthResponse response = authService.register(registerRequest);
+
+        assertNotNull(response);
+        assertEquals("jwt-token", response.getToken());
+        assertEquals("ADMIN", response.getRole());
         verify(accountRepository, times(1)).save(any(Account.class));
         verify(employeeRepository, times(1)).save(any());
     }
@@ -104,6 +132,7 @@ public class AuthServiceTest {
         Account account = new Account();
         account.setEmail("test@forep.local");
         account.setPassword("hashedPassword");
+        account.setRole(defaultRole);
         account.setFailedLoginAttempts(2);
 
         when(accountRepository.findByEmail(loginRequest.getEmail())).thenReturn(Optional.of(account));
@@ -113,8 +142,10 @@ public class AuthServiceTest {
 
         assertNotNull(response);
         assertEquals("jwt-token", response.getToken());
+        assertEquals("EMPLOYEE", response.getRole());
         assertEquals(0, account.getFailedLoginAttempts()); // verified failed attempts reset
         verify(authenticationManager, times(1)).authenticate(any(UsernamePasswordAuthenticationToken.class));
         verify(accountRepository, times(1)).save(account);
     }
 }
+

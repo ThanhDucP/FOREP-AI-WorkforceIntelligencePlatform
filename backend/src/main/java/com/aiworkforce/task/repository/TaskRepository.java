@@ -9,5 +9,12 @@ import java.util.List;
 
 public interface TaskRepository extends JpaRepository<Task, UUID> {
     List<Task> findByAssigneeId(UUID assigneeId);
+    List<Task> findByReporterId(UUID reporterId);
+    List<Task> findByTeamId(UUID teamId);
+    List<Task> findByTeamIdIn(List<UUID> teamIds);
+    List<Task> findByTeamOrganizationId(UUID organizationId);
+    List<Task> findBySprintId(UUID sprintId);
+    List<Task> findByStatus(TaskStatus status);
     List<Task> findByStatusNotAndDueDateBefore(TaskStatus status, LocalDateTime dateTime);
+    long countByStatus(TaskStatus status);
 }

@@ -1,0 +1,22 @@
+$kind: http-request
+name: Get Active Sprint
+method: GET
+url: '{{base_url}}/api/v1/sprints/active'
+order: 5010
+headers:
+  - key: Authorization
+    value: 'Bearer {{jwt_token}}'
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test("Status 200 OK", function () {
+        pm.response.to.have.status(200);
+      });
+      pm.test("Save active sprint variables when available", function () {
+        const sprint = pm.response.json().data;
+        if (sprint) {
+          pm.environment.set("sprint_id", sprint.id);
+          pm.environment.set("sprint_number", sprint.sprintNumber);
+        }
+      });

@@ -6,8 +6,13 @@ import org.springframework.stereotype.Repository;
 
 import java.util.List;
 import java.util.UUID;
+import com.aiworkforce.core.enums.LeaveStatus;
 
 @Repository
 public interface LeaveRequestRepository extends JpaRepository<LeaveRequest, UUID> {
     List<LeaveRequest> findByEmployeeId(UUID employeeId);
+    List<LeaveRequest> findByEmployeeTeamId(UUID teamId);
+    List<LeaveRequest> findByEmployeeTeamIdIn(List<UUID> teamIds);
+    List<LeaveRequest> findByEmployeeTeamOrganizationId(UUID organizationId);
+    List<LeaveRequest> findByStatus(LeaveStatus status);
 }

@@ -1,0 +1,23 @@
+$kind: http-request
+name: Get All Sprints
+method: GET
+url: '{{base_url}}/api/v1/sprints'
+order: 5000
+headers:
+  - key: Authorization
+    value: 'Bearer {{jwt_token}}'
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test("Status 200 OK", function () {
+        pm.response.to.have.status(200);
+      });
+      pm.test("Sprints response is array", function () {
+        const json = pm.response.json();
+        pm.expect(json.data).to.be.an("array");
+        if (json.data.length > 0) {
+          pm.environment.set("sprint_id", json.data[0].id);
+          pm.environment.set("sprint_number", json.data[0].sprintNumber);
+        }
+      });

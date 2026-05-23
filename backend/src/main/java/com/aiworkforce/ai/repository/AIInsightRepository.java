@@ -7,4 +7,7 @@ import java.util.UUID;
 
 public interface AIInsightRepository extends JpaRepository<AIInsight, UUID> {
     List<AIInsight> findByEmployeeIdOrderByCreatedAtDesc(UUID employeeId);
+    List<AIInsight> findByEmployeeTeamIdOrderByCreatedAtDesc(UUID teamId);
+    List<AIInsight> findByEmployeeTeamIdInOrderByCreatedAtDesc(List<UUID> teamIds);
+    List<AIInsight> findByEmployeeTeamOrganizationIdOrderByCreatedAtDesc(UUID organizationId);
 }

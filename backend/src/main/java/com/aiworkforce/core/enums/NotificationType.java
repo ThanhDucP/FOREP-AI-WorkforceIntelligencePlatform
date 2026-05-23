@@ -1,0 +1,2 @@
+package com.aiworkforce.core.enums;
+public enum NotificationType { TASK_OVERDUE, AI_INSIGHT, TASK_COMPLETED, COMMENT_ADDED, BURNOUT_ALERT, WORKLOAD_REBALANCE, LEAVE_APPROVED }

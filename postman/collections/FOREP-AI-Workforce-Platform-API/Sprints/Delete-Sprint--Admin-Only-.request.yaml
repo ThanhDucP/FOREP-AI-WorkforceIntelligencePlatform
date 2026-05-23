@@ -1,0 +1,15 @@
+$kind: http-request
+name: Delete Sprint (Admin Only)
+method: DELETE
+url: '{{base_url}}/api/v1/sprints/{{sprint_id}}'
+order: 5070
+headers:
+  - key: Authorization
+    value: 'Bearer {{jwt_token}}'
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test("Status is success", function () {
+        pm.expect(pm.response.code).to.be.oneOf([200, 204]);
+      });

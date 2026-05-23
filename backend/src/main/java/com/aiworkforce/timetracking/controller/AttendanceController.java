@@ -42,4 +42,22 @@ public class AttendanceController {
     public ResponseEntity<ApiResponse<List<AttendanceResponse>>> getEmployeeAttendanceHistory(@PathVariable UUID employeeId) {
         return ResponseEntity.ok(ApiResponse.success(attendanceService.getEmployeeAttendanceHistory(employeeId)));
     }
+
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
+    @GetMapping("/team/{teamId}")
+    public ResponseEntity<ApiResponse<List<AttendanceResponse>>> getTeamAttendanceHistory(@PathVariable UUID teamId) {
+        return ResponseEntity.ok(ApiResponse.success(attendanceService.getTeamAttendanceHistory(teamId)));
+    }
+
+    @PreAuthorize("hasRole('MANAGER')")
+    @GetMapping("/managed-teams")
+    public ResponseEntity<ApiResponse<List<AttendanceResponse>>> getManagedTeamAttendanceHistory() {
+        return ResponseEntity.ok(ApiResponse.success(attendanceService.getManagedTeamAttendanceHistory()));
+    }
+
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
+    @GetMapping("/organization/{organizationId}")
+    public ResponseEntity<ApiResponse<List<AttendanceResponse>>> getOrganizationAttendanceHistory(@PathVariable UUID organizationId) {
+        return ResponseEntity.ok(ApiResponse.success(attendanceService.getOrganizationAttendanceHistory(organizationId)));
+    }
 }

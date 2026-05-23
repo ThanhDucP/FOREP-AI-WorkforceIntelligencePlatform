@@ -1,0 +1,19 @@
+$kind: http-request
+name: Get My Attendance History
+method: GET
+url: '{{base_url}}/api/v1/attendance/my-history'
+order: 3000
+headers:
+  - key: Authorization
+    value: 'Bearer {{jwt_token}}'
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test("Status 200 OK", function () {
+        pm.response.to.have.status(200);
+      });
+      pm.test("Response is array", function () {
+        var json = pm.response.json();
+        pm.expect(json.data).to.be.an("array");
+      });
