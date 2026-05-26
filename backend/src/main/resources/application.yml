@@ -27,3 +27,11 @@ ollama:
   base-url: http://localhost:11434
   model: gemma:2b
   timeout-seconds: 60
+
+ai:
+  provider: ${AI_PROVIDER:ollama}
+  gemini:
+    api-key: ${GEMINI_API_KEY:AIzaSyAhlP4XG2PDLTQ9-qiwqivg817bP0YbakQ}
+    model: ${GEMINI_MODEL:gemini-1.5-flash}
+    timeout-seconds: 30
+

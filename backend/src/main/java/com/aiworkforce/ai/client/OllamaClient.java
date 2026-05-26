@@ -25,19 +25,46 @@ public class OllamaClient {
     private final String model;
     private final int timeoutSeconds;
 
+    // Gemini variables
+    private final String provider;
+    private final String geminiApiKey;
+    private final String geminiModel;
+    private final WebClient geminiWebClient;
+
     public OllamaClient(
             @Value("${ollama.base-url:http://localhost:11434}") String baseUrl,
             @Value("${ollama.model:gemma:2b}") String model,
             @Value("${ollama.timeout-seconds:60}") int timeoutSeconds) {
+        this(baseUrl, model, timeoutSeconds, "ollama", "", "gemini-1.5-flash");
+    }
+
+    public OllamaClient(
+            String baseUrl,
+            String model,
+            int timeoutSeconds,
+            String provider,
+            String geminiApiKey,
+            String geminiModel) {
         this.webClient = WebClient.builder()
                 .baseUrl(baseUrl)
                 .build();
         this.baseUrl = baseUrl;
         this.model = model;
         this.timeoutSeconds = timeoutSeconds;
+        
+        this.provider = provider;
+        this.geminiApiKey = geminiApiKey;
+        this.geminiModel = geminiModel;
+        this.geminiWebClient = WebClient.builder()
+                .baseUrl("https://generativelanguage.googleapis.com")
+                .build();
     }
 
     public String generateInsight(String prompt) {
+        if ("gemini".equalsIgnoreCase(provider)) {
+            return generateInsightWithGemini(prompt);
+        }
+
         log.info("Calling Ollama API with model: {} and prompt length: {}", model, prompt != null ? prompt.length() : 0);
 
         if (!isModelAvailable()) {
@@ -73,6 +100,56 @@ public class OllamaClient {
             log.error("Ollama API returned HTTP {}. Using structured fallback. Error: {}", e.getStatusCode(), e.getMessage());
         } catch (Exception e) {
             log.error("Error calling Ollama API. Using structured fallback. Error: {}", e.getMessage());
+        }
+
+        return buildFallbackResponse(prompt);
+    }
+
+    private String generateInsightWithGemini(String prompt) {
+        log.info("Calling Gemini API with model: {} and prompt length: {}", geminiModel, prompt != null ? prompt.length() : 0);
+
+        if (geminiApiKey == null || geminiApiKey.isBlank()) {
+            log.warn("Gemini API key is not configured. Using structured fallback.");
+            return buildFallbackResponse(prompt);
+        }
+
+        GeminiRequest request = GeminiRequest.builder()
+                .contents(List.of(GeminiContent.builder()
+                        .parts(List.of(GeminiPart.builder()
+                                .text(prompt)
+                                .build()))
+                        .build()))
+                .build();
+
+        try {
+            GeminiResponse response = geminiWebClient.post()
+                    .uri(uriBuilder -> uriBuilder
+                            .path("/v1beta/models/" + geminiModel + ":generateContent")
+                            .queryParam("key", geminiApiKey)
+                            .build())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .bodyValue(request)
+                    .retrieve()
+                    .bodyToMono(GeminiResponse.class)
+                    .timeout(Duration.ofSeconds(timeoutSeconds))
+                    .block();
+
+            if (response != null && response.getCandidates() != null && !response.getCandidates().isEmpty()) {
+                GeminiCandidate candidate = response.getCandidates().get(0);
+                if (candidate.getContent() != null && candidate.getContent().getParts() != null && !candidate.getContent().getParts().isEmpty()) {
+                    String text = candidate.getContent().getParts().get(0).getText();
+                    if (text != null && !text.isBlank()) {
+                        log.info("Gemini API responded successfully");
+                        return text;
+                    }
+                }
+            }
+
+            log.warn("Gemini API returned an empty response. Using structured fallback.");
+        } catch (WebClientResponseException e) {
+            log.error("Gemini API returned HTTP {}. Using structured fallback. Error: {}", e.getStatusCode(), e.getResponseBodyAsString());
+        } catch (Exception e) {
+            log.error("Error calling Gemini API. Using structured fallback. Error: {}", e.getMessage());
         }
 
         return buildFallbackResponse(prompt);
@@ -183,5 +260,44 @@ public class OllamaClient {
     public static class OllamaModelTag {
         private String name;
         private String model;
+    }
+
+    // Gemini DTOs
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class GeminiRequest {
+        private List<GeminiContent> contents;
+    }
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class GeminiContent {
+        private List<GeminiPart> parts;
+    }
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class GeminiPart {
+        private String text;
+    }
+
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class GeminiResponse {
+        private List<GeminiCandidate> candidates;
+    }
+
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class GeminiCandidate {
+        private GeminiContent content;
     }
 }

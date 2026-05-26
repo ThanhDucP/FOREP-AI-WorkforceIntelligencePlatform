@@ -32,7 +32,7 @@ public class OllamaClientTest {
                 "{\"models\":[{\"name\":\"gemma:2b\",\"model\":\"gemma:2b\"}]}",
                 "{\"model\":\"gemma:2b\",\"response\":\"{\\\"status_evaluation\\\":\\\"OK\\\",\\\"primary_reason\\\":\\\"Stable\\\",\\\"recommendations\\\":[\\\"Keep pace\\\"]}\",\"done\":true}"
         );
-        OllamaClient client = new OllamaClient(baseUrl(), "gemma:2b", 2);
+        OllamaClient client = new OllamaClient(baseUrl(), "gemma:2b", 15);
 
         String response = client.generateInsight("risk LOW");
 
@@ -43,7 +43,7 @@ public class OllamaClientTest {
     @Test
     void generateInsight_ReturnsStructuredFallback_WhenModelIsMissing() throws Exception {
         startServer("{\"models\":[{\"name\":\"llama3\",\"model\":\"llama3\"}]}", "{}");
-        OllamaClient client = new OllamaClient(baseUrl(), "gemma:2b", 2);
+        OllamaClient client = new OllamaClient(baseUrl(), "gemma:2b", 15);
 
         String response = client.generateInsight("risk HIGH");
 
@@ -64,6 +64,21 @@ public class OllamaClientTest {
         assertTrue(json.has("status_evaluation"));
         assertTrue(json.has("primary_reason"));
         assertTrue(json.has("recommendations"));
+    }
+
+    @Test
+    void generateInsight_ReturnsStructuredFallback_WhenGeminiFails() throws Exception {
+        OllamaClient client = new OllamaClient(
+                "http://localhost:11434", "gemma:2b", 2, "gemini", "invalid-key", "gemini-1.5-flash"
+        );
+
+        String response = client.generateInsight("risk HIGH");
+
+        JsonNode json = OBJECT_MAPPER.readTree(response);
+        assertTrue(json.has("status_evaluation"));
+        assertTrue(json.has("primary_reason"));
+        assertTrue(json.has("recommendations"));
+        assertTrue(json.get("status_evaluation").asText().contains("quá tải"));
     }
 
     private void startServer(String tagsResponse, String generateResponse) throws IOException {
