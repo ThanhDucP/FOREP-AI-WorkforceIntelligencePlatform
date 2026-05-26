@@ -1,10 +1,12 @@
 package com.aiworkforce.ai.client;
 
+import com.aiworkforce.ai.config.AiProperties;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sun.net.httpserver.HttpServer;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.web.reactive.function.client.WebClient;
 
 import java.io.IOException;
 import java.io.OutputStream;
@@ -32,7 +34,7 @@ public class OllamaClientTest {
                 "{\"models\":[{\"name\":\"gemma:2b\",\"model\":\"gemma:2b\"}]}",
                 "{\"model\":\"gemma:2b\",\"response\":\"{\\\"status_evaluation\\\":\\\"OK\\\",\\\"primary_reason\\\":\\\"Stable\\\",\\\"recommendations\\\":[\\\"Keep pace\\\"]}\",\"done\":true}"
         );
-        OllamaClient client = new OllamaClient(baseUrl(), "gemma:2b", 15);
+        OllamaClient client = buildClient(baseUrl(), "gemma:2b", 15, "ollama", "", "gemini-1.5-flash");
 
         String response = client.generateInsight("risk LOW");
 
@@ -43,7 +45,7 @@ public class OllamaClientTest {
     @Test
     void generateInsight_ReturnsStructuredFallback_WhenModelIsMissing() throws Exception {
         startServer("{\"models\":[{\"name\":\"llama3\",\"model\":\"llama3\"}]}", "{}");
-        OllamaClient client = new OllamaClient(baseUrl(), "gemma:2b", 15);
+        OllamaClient client = buildClient(baseUrl(), "gemma:2b", 15, "ollama", "", "gemini-1.5-flash");
 
         String response = client.generateInsight("risk HIGH");
 
@@ -56,7 +58,7 @@ public class OllamaClientTest {
 
     @Test
     void generateInsight_ReturnsStructuredFallback_WhenOllamaIsUnavailable() throws Exception {
-        OllamaClient client = new OllamaClient("http://127.0.0.1:1", "gemma:2b", 1);
+        OllamaClient client = buildClient("http://127.0.0.1:1", "gemma:2b", 1, "ollama", "", "gemini-1.5-flash");
 
         String response = client.generateInsight("risk MEDIUM");
 
@@ -68,7 +70,7 @@ public class OllamaClientTest {
 
     @Test
     void generateInsight_ReturnsStructuredFallback_WhenGeminiFails() throws Exception {
-        OllamaClient client = new OllamaClient(
+        OllamaClient client = buildClient(
                 "http://localhost:11434", "gemma:2b", 2, "gemini", "invalid-key", "gemini-1.5-flash"
         );
 
@@ -79,6 +81,38 @@ public class OllamaClientTest {
         assertTrue(json.has("primary_reason"));
         assertTrue(json.has("recommendations"));
         assertTrue(json.get("status_evaluation").asText().contains("quá tải"));
+    }
+
+    // -----------------------------------------------------------------------
+    // Helpers
+    // -----------------------------------------------------------------------
+
+    /**
+     * Builds an OllamaClient using the new constructor (WebClient, WebClient, AiProperties).
+     */
+    private OllamaClient buildClient(String ollamaBaseUrl, String model, int timeoutSeconds,
+                                     String provider, String geminiApiKey, String geminiModel) {
+        WebClient ollamaWc = WebClient.builder().baseUrl(ollamaBaseUrl).build();
+        WebClient geminiWc = WebClient.builder()
+                .baseUrl("https://generativelanguage.googleapis.com")
+                .build();
+
+        AiProperties props = new AiProperties();
+        props.setProvider(provider);
+
+        AiProperties.Ollama ollamaCfg = new AiProperties.Ollama();
+        ollamaCfg.setBaseUrl(ollamaBaseUrl);
+        ollamaCfg.setModel(model);
+        ollamaCfg.setTimeoutSeconds(timeoutSeconds);
+        props.setOllama(ollamaCfg);
+
+        AiProperties.Gemini geminiCfg = new AiProperties.Gemini();
+        geminiCfg.setApiKey(geminiApiKey);
+        geminiCfg.setModel(geminiModel);
+        geminiCfg.setTimeoutSeconds(timeoutSeconds);
+        props.setGemini(geminiCfg);
+
+        return new OllamaClient(ollamaWc, geminiWc, props);
     }
 
     private void startServer(String tagsResponse, String generateResponse) throws IOException {

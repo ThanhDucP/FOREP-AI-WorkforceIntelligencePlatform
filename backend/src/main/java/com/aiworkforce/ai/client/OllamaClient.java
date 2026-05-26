@@ -1,11 +1,12 @@
 package com.aiworkforce.ai.client;
 
+import com.aiworkforce.ai.config.AiProperties;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
@@ -18,74 +19,44 @@ import java.util.Optional;
 
 @Component
 @Slf4j
+@RequiredArgsConstructor
 public class OllamaClient {
 
-    private final WebClient webClient;
-    private final String baseUrl;
-    private final String model;
-    private final int timeoutSeconds;
-
-    // Gemini variables
-    private final String provider;
-    private final String geminiApiKey;
-    private final String geminiModel;
+    private final WebClient ollamaWebClient;
     private final WebClient geminiWebClient;
-
-    public OllamaClient(
-            @Value("${ollama.base-url:http://localhost:11434}") String baseUrl,
-            @Value("${ollama.model:gemma:2b}") String model,
-            @Value("${ollama.timeout-seconds:60}") int timeoutSeconds) {
-        this(baseUrl, model, timeoutSeconds, "ollama", "", "gemini-1.5-flash");
-    }
-
-    public OllamaClient(
-            String baseUrl,
-            String model,
-            int timeoutSeconds,
-            String provider,
-            String geminiApiKey,
-            String geminiModel) {
-        this.webClient = WebClient.builder()
-                .baseUrl(baseUrl)
-                .build();
-        this.baseUrl = baseUrl;
-        this.model = model;
-        this.timeoutSeconds = timeoutSeconds;
-        
-        this.provider = provider;
-        this.geminiApiKey = geminiApiKey;
-        this.geminiModel = geminiModel;
-        this.geminiWebClient = WebClient.builder()
-                .baseUrl("https://generativelanguage.googleapis.com")
-                .build();
-    }
+    private final AiProperties props;
 
     public String generateInsight(String prompt) {
-        if ("gemini".equalsIgnoreCase(provider)) {
+        if ("gemini".equalsIgnoreCase(props.getProvider())) {
             return generateInsightWithGemini(prompt);
         }
+        return generateInsightWithOllama(prompt);
+    }
 
-        log.info("Calling Ollama API with model: {} and prompt length: {}", model, prompt != null ? prompt.length() : 0);
+    private String generateInsightWithOllama(String prompt) {
+        AiProperties.Ollama ollamaCfg = props.getOllama();
+
+        log.info("Calling Ollama API with model: {} and prompt length: {}", ollamaCfg.getModel(), prompt != null ? prompt.length() : 0);
 
         if (!isModelAvailable()) {
-            log.warn("Ollama model '{}' is not available or Ollama is not reachable. Using structured fallback.", model);
+            log.warn("Ollama model '{}' is not available or Ollama is not reachable. Using structured fallback.", ollamaCfg.getModel());
             return buildFallbackResponse(prompt);
         }
 
         OllamaRequest request = OllamaRequest.builder()
-                .model(model)
+                .model(ollamaCfg.getModel())
                 .prompt(prompt)
                 .stream(false)
                 .build();
 
         try {
-            OllamaResponse response = webClient.post()
+            OllamaResponse response = ollamaWebClient.post()
                     .uri("/api/generate")
                     .contentType(MediaType.APPLICATION_JSON)
                     .bodyValue(request)
                     .retrieve()
                     .bodyToMono(OllamaResponse.class)
-                    .timeout(Duration.ofSeconds(timeoutSeconds))
+                    .timeout(Duration.ofSeconds(ollamaCfg.getTimeoutSeconds()))
                     .block();
 
             if (response != null && response.getResponse() != null && !response.getResponse().isBlank()) {
@@ -93,9 +64,9 @@ public class OllamaClient {
                 return response.getResponse();
             }
 
-            log.warn("Ollama API returned an empty response for model '{}'. Using structured fallback.", model);
+            log.warn("Ollama API returned an empty response for model '{}'. Using structured fallback.", ollamaCfg.getModel());
         } catch (WebClientResponseException.NotFound e) {
-            log.error("Ollama generate endpoint returned 404. Check ollama.base-url '{}' and model '{}'.", baseUrl, model);
+            log.error("Ollama generate endpoint returned 404. Check ollama.base-url '{}' and model '{}'.", ollamaCfg.getBaseUrl(), ollamaCfg.getModel());
         } catch (WebClientResponseException e) {
             log.error("Ollama API returned HTTP {}. Using structured fallback. Error: {}", e.getStatusCode(), e.getMessage());
         } catch (Exception e) {
@@ -106,9 +77,11 @@ public class OllamaClient {
     }
 
     private String generateInsightWithGemini(String prompt) {
-        log.info("Calling Gemini API with model: {} and prompt length: {}", geminiModel, prompt != null ? prompt.length() : 0);
+        AiProperties.Gemini geminiCfg = props.getGemini();
 
-        if (geminiApiKey == null || geminiApiKey.isBlank()) {
+        log.info("Calling Gemini API with model: {} and prompt length: {}", geminiCfg.getModel(), prompt != null ? prompt.length() : 0);
+
+        if (geminiCfg.getApiKey() == null || geminiCfg.getApiKey().isBlank()) {
             log.warn("Gemini API key is not configured. Using structured fallback.");
             return buildFallbackResponse(prompt);
         }
@@ -124,14 +97,14 @@ public class OllamaClient {
         try {
             GeminiResponse response = geminiWebClient.post()
                     .uri(uriBuilder -> uriBuilder
-                            .path("/v1beta/models/" + geminiModel + ":generateContent")
-                            .queryParam("key", geminiApiKey)
-                            .build())
+                            .path("/v1beta/models/{model}:generateContent")
+                            .queryParam("key", geminiCfg.getApiKey())
+                            .build(geminiCfg.getModel()))
                     .contentType(MediaType.APPLICATION_JSON)
                     .bodyValue(request)
                     .retrieve()
                     .bodyToMono(GeminiResponse.class)
-                    .timeout(Duration.ofSeconds(timeoutSeconds))
+                    .timeout(Duration.ofSeconds(geminiCfg.getTimeoutSeconds()))
                     .block();
 
             if (response != null && response.getCandidates() != null && !response.getCandidates().isEmpty()) {
@@ -156,29 +129,30 @@ public class OllamaClient {
     }
 
     private boolean isModelAvailable() {
+        AiProperties.Ollama ollamaCfg = props.getOllama();
         try {
-            OllamaTagsResponse response = webClient.get()
+            OllamaTagsResponse response = ollamaWebClient.get()
                     .uri("/api/tags")
                     .retrieve()
                     .bodyToMono(OllamaTagsResponse.class)
-                    .timeout(Duration.ofSeconds(Math.min(timeoutSeconds, 10)))
+                    .timeout(Duration.ofSeconds(Math.min(ollamaCfg.getTimeoutSeconds(), 10)))
                     .block();
 
             boolean available = Optional.ofNullable(response)
                     .map(OllamaTagsResponse::getModels)
                     .orElse(List.of())
                     .stream()
-                    .anyMatch(tag -> model.equals(tag.getName()) || model.equals(tag.getModel()));
+                    .anyMatch(tag -> ollamaCfg.getModel().equals(tag.getName()) || ollamaCfg.getModel().equals(tag.getModel()));
 
             if (!available) {
-                log.warn("Ollama is reachable at '{}', but model '{}' was not found in /api/tags.", baseUrl, model);
+                log.warn("Ollama is reachable at '{}', but model '{}' was not found in /api/tags.", ollamaCfg.getBaseUrl(), ollamaCfg.getModel());
             }
             return available;
         } catch (WebClientResponseException.NotFound e) {
-            log.error("Ollama /api/tags returned 404. The configured base URL '{}' may not point to an Ollama server.", baseUrl);
+            log.error("Ollama /api/tags returned 404. The configured base URL '{}' may not point to an Ollama server.", ollamaCfg.getBaseUrl());
             return false;
         } catch (Exception e) {
-            log.error("Unable to validate Ollama model '{}' at '{}'. Error: {}", model, baseUrl, e.getMessage());
+            log.error("Unable to validate Ollama model '{}' at '{}'. Error: {}", ollamaCfg.getModel(), ollamaCfg.getBaseUrl(), e.getMessage());
             return false;
         }
     }
