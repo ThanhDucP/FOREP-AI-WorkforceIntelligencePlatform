@@ -31,7 +31,7 @@ ollama:
 ai:
   provider: ${AI_PROVIDER:ollama}
   gemini:
-    api-key: ${GEMINI_API_KEY:AIzaSyAhlP4XG2PDLTQ9-qiwqivg817bP0YbakQ}
+    api-key: ${GEMINI_API_KEY:}
     model: ${GEMINI_MODEL:gemini-1.5-flash}
     timeout-seconds: 30
 
