@@ -1,6 +1,7 @@
 package com.aiworkforce.ai.client;
 
 import com.aiworkforce.ai.config.AiProperties;
+import com.aiworkforce.core.exception.AiServiceException;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -14,9 +15,25 @@ import org.springframework.web.reactive.function.client.WebClientResponseExcepti
 
 import java.time.Duration;
 import java.util.List;
-import java.util.Locale;
-import java.util.Optional;
 
+/**
+ * Client AI dùng để gọi dịch vụ phân tích burnout/insight.
+ * <p>
+ * <b>Provider hiện tại đang sử dụng: Google Gemini API (miễn phí)</b>
+ * <p>
+ * Lịch sử thay đổi:
+ * <ul>
+ *   <li>Ban đầu dùng Ollama (chạy local, yêu cầu GPU) - ĐÃ NGỪNG SỬ DỤNG</li>
+ *   <li>Từ phiên bản deploy trên Render: chuyển sang Gemini API (miễn phí, không cần GPU)</li>
+ * </ul>
+ * <p>
+ * <b>LƯU Ý:</b> Code Ollama vẫn được giữ lại (deprecated) để hỗ trợ dev local nếu cần.
+ * Trong môi trường production, biến {@code AI_PROVIDER=gemini} phải được set trên Render.
+ * <p>
+ * Khi AI không kết nối được hoặc prompt lỗi, client sẽ <b>throw {@link AiServiceException}</b>
+ * thay vì trả về kết quả giả (mock/fallback). Điều này giúp frontend và controller
+ * nhận biết chính xác trạng thái lỗi.
+ */
 @Component
 @Slf4j
 @RequiredArgsConstructor
@@ -26,64 +43,62 @@ public class OllamaClient {
     private final WebClient geminiWebClient;
     private final AiProperties props;
 
+    // =========================================================================
+    // PUBLIC API
+    // =========================================================================
+
+    /**
+     * Gọi AI để sinh insight dựa trên prompt.
+     * <p>
+     * Tùy theo {@code ai.provider} trong config:
+     * <ul>
+     *   <li>{@code gemini} (mặc định cho production) → gọi Google Gemini API</li>
+     *   <li>{@code ollama} (deprecated, chỉ dùng dev local) → gọi Ollama local</li>
+     * </ul>
+     *
+     * @param prompt Nội dung prompt gửi cho AI
+     * @return Chuỗi response từ AI (thường là JSON)
+     * @throws AiServiceException nếu AI không kết nối được, API key sai, hoặc prompt lỗi
+     * @throws IllegalArgumentException nếu prompt null hoặc rỗng
+     */
     public String generateInsight(String prompt) {
+        // Validate prompt đầu vào
+        if (prompt == null || prompt.isBlank()) {
+            throw new IllegalArgumentException("Prompt không được để trống. Vui lòng cung cấp nội dung phân tích.");
+        }
+
         if ("gemini".equalsIgnoreCase(props.getProvider())) {
             return generateInsightWithGemini(prompt);
         }
+
+        // [DEPRECATED] Ollama - chỉ dùng cho dev local, không dùng trên production
+        log.warn("[DEPRECATED] Đang sử dụng Ollama provider. Khuyến nghị chuyển sang 'gemini' cho production.");
         return generateInsightWithOllama(prompt);
     }
 
-    private String generateInsightWithOllama(String prompt) {
-        AiProperties.Ollama ollamaCfg = props.getOllama();
+    // =========================================================================
+    // GEMINI - Provider chính (Production)
+    // =========================================================================
 
-        log.info("Calling Ollama API with model: {} and prompt length: {}", ollamaCfg.getModel(), prompt != null ? prompt.length() : 0);
-
-        if (!isModelAvailable()) {
-            log.warn("Ollama model '{}' is not available or Ollama is not reachable. Using structured fallback.", ollamaCfg.getModel());
-            return buildFallbackResponse(prompt);
-        }
-
-        OllamaRequest request = OllamaRequest.builder()
-                .model(ollamaCfg.getModel())
-                .prompt(prompt)
-                .stream(false)
-                .build();
-
-        try {
-            OllamaResponse response = ollamaWebClient.post()
-                    .uri("/api/generate")
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .bodyValue(request)
-                    .retrieve()
-                    .bodyToMono(OllamaResponse.class)
-                    .timeout(Duration.ofSeconds(ollamaCfg.getTimeoutSeconds()))
-                    .block();
-
-            if (response != null && response.getResponse() != null && !response.getResponse().isBlank()) {
-                log.info("Ollama API responded successfully");
-                return response.getResponse();
-            }
-
-            log.warn("Ollama API returned an empty response for model '{}'. Using structured fallback.", ollamaCfg.getModel());
-        } catch (WebClientResponseException.NotFound e) {
-            log.error("Ollama generate endpoint returned 404. Check ollama.base-url '{}' and model '{}'.", ollamaCfg.getBaseUrl(), ollamaCfg.getModel());
-        } catch (WebClientResponseException e) {
-            log.error("Ollama API returned HTTP {}. Using structured fallback. Error: {}", e.getStatusCode(), e.getMessage());
-        } catch (Exception e) {
-            log.error("Error calling Ollama API. Using structured fallback. Error: {}", e.getMessage());
-        }
-
-        return buildFallbackResponse(prompt);
-    }
-
+    /**
+     * Gọi Google Gemini API để sinh insight.
+     * Throw {@link AiServiceException} nếu:
+     * - API key chưa cấu hình
+     * - Gemini trả về lỗi HTTP (400, 401, 429, etc.)
+     * - Timeout hoặc lỗi mạng
+     * - Response rỗng
+     */
     private String generateInsightWithGemini(String prompt) {
         AiProperties.Gemini geminiCfg = props.getGemini();
 
-        log.info("Calling Gemini API with model: {} and prompt length: {}", geminiCfg.getModel(), prompt != null ? prompt.length() : 0);
+        log.info("Gọi Gemini API | model: {} | prompt length: {}", geminiCfg.getModel(), prompt.length());
 
+        // Kiểm tra API key
         if (geminiCfg.getApiKey() == null || geminiCfg.getApiKey().isBlank()) {
-            log.warn("Gemini API key is not configured. Using structured fallback.");
-            return buildFallbackResponse(prompt);
+            throw new AiServiceException(
+                    "Gemini API key chưa được cấu hình. "
+                    + "Vui lòng set biến môi trường GEMINI_API_KEY trên Render hoặc trong file .env"
+            );
         }
 
         GeminiRequest request = GeminiRequest.builder()
@@ -107,28 +122,149 @@ public class OllamaClient {
                     .timeout(Duration.ofSeconds(geminiCfg.getTimeoutSeconds()))
                     .block();
 
+            // Kiểm tra response hợp lệ
             if (response != null && response.getCandidates() != null && !response.getCandidates().isEmpty()) {
                 GeminiCandidate candidate = response.getCandidates().get(0);
-                if (candidate.getContent() != null && candidate.getContent().getParts() != null && !candidate.getContent().getParts().isEmpty()) {
+                if (candidate.getContent() != null
+                        && candidate.getContent().getParts() != null
+                        && !candidate.getContent().getParts().isEmpty()) {
                     String text = candidate.getContent().getParts().get(0).getText();
                     if (text != null && !text.isBlank()) {
-                        log.info("Gemini API responded successfully");
+                        log.info("Gemini API phản hồi thành công");
                         return text;
                     }
                 }
             }
 
-            log.warn("Gemini API returned an empty response. Using structured fallback.");
-        } catch (WebClientResponseException e) {
-            log.error("Gemini API returned HTTP {}. Using structured fallback. Error: {}", e.getStatusCode(), e.getResponseBodyAsString());
-        } catch (Exception e) {
-            log.error("Error calling Gemini API. Using structured fallback. Error: {}", e.getMessage());
-        }
+            // Response rỗng - throw lỗi rõ ràng
+            throw new AiServiceException(
+                    "Gemini API trả về response rỗng. Model: " + geminiCfg.getModel()
+                    + ". Có thể prompt không phù hợp hoặc bị filter bởi safety settings."
+            );
 
-        return buildFallbackResponse(prompt);
+        } catch (AiServiceException e) {
+            // Re-throw AiServiceException (đã tạo ở trên)
+            throw e;
+        } catch (WebClientResponseException e) {
+            String errorDetail = extractGeminiErrorMessage(e);
+            log.error("Gemini API lỗi HTTP {} | {}", e.getStatusCode(), errorDetail);
+
+            if (e.getStatusCode().value() == 400) {
+                throw new AiServiceException("Gemini API: Request không hợp lệ - " + errorDetail, e);
+            } else if (e.getStatusCode().value() == 401 || e.getStatusCode().value() == 403) {
+                throw new AiServiceException("Gemini API: API key không hợp lệ hoặc không có quyền truy cập. "
+                        + "Kiểm tra lại GEMINI_API_KEY.", e);
+            } else if (e.getStatusCode().value() == 429) {
+                throw new AiServiceException("Gemini API: Đã vượt quá giới hạn request (rate limit). "
+                        + "Vui lòng thử lại sau vài phút.", e);
+            } else {
+                throw new AiServiceException("Gemini API lỗi HTTP " + e.getStatusCode() + ": " + errorDetail, e);
+            }
+        } catch (Exception e) {
+            log.error("Lỗi kết nối Gemini API: {}", e.getMessage());
+            throw new AiServiceException(
+                    "Không thể kết nối đến Gemini API. Kiểm tra kết nối mạng và cấu hình. Chi tiết: " + e.getMessage(), e
+            );
+        }
     }
 
-    private boolean isModelAvailable() {
+    /**
+     * Trích xuất thông báo lỗi từ Gemini error response body.
+     */
+    private String extractGeminiErrorMessage(WebClientResponseException e) {
+        try {
+            String body = e.getResponseBodyAsString();
+            // Gemini trả lỗi dạng JSON: {"error":{"message":"..."}}
+            if (body.contains("\"message\"")) {
+                int start = body.indexOf("\"message\"") + 11;
+                int end = body.indexOf("\"", start);
+                if (end > start) {
+                    return body.substring(start, end);
+                }
+            }
+            return body.length() > 200 ? body.substring(0, 200) + "..." : body;
+        } catch (Exception ex) {
+            return e.getMessage();
+        }
+    }
+
+    // =========================================================================
+    // OLLAMA - [DEPRECATED] Chỉ dùng cho phát triển cục bộ (local development)
+    // =========================================================================
+    // LƯU Ý: Code Ollama được giữ lại để nhóm có thể test local nếu có cài Ollama.
+    // Trong production trên Render, KHÔNG sử dụng Ollama vì yêu cầu GPU local.
+    // Để chuyển sang Ollama: set AI_PROVIDER=ollama trong biến môi trường.
+
+    /**
+     * @deprecated Sử dụng {@code ai.provider=gemini} thay thế.
+     * Ollama yêu cầu cài đặt local và GPU, không phù hợp cho deploy miễn phí.
+     */
+    @Deprecated(since = "2025-05", forRemoval = false)
+    private String generateInsightWithOllama(String prompt) {
+        AiProperties.Ollama ollamaCfg = props.getOllama();
+
+        log.info("[DEPRECATED-OLLAMA] Gọi Ollama API | model: {} | prompt length: {}",
+                ollamaCfg.getModel(), prompt.length());
+
+        // Kiểm tra model có sẵn trên Ollama local
+        if (!isOllamaModelAvailable()) {
+            throw new AiServiceException(
+                    "Không thể kết nối đến Ollama tại '" + ollamaCfg.getBaseUrl() + "' "
+                    + "hoặc model '" + ollamaCfg.getModel() + "' chưa được cài đặt. "
+                    + "Khuyến nghị: chuyển sang provider 'gemini' (set AI_PROVIDER=gemini)."
+            );
+        }
+
+        OllamaRequest request = OllamaRequest.builder()
+                .model(ollamaCfg.getModel())
+                .prompt(prompt)
+                .stream(false)
+                .build();
+
+        try {
+            OllamaResponse response = ollamaWebClient.post()
+                    .uri("/api/generate")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .bodyValue(request)
+                    .retrieve()
+                    .bodyToMono(OllamaResponse.class)
+                    .timeout(Duration.ofSeconds(ollamaCfg.getTimeoutSeconds()))
+                    .block();
+
+            if (response != null && response.getResponse() != null && !response.getResponse().isBlank()) {
+                log.info("[DEPRECATED-OLLAMA] Ollama API phản hồi thành công");
+                return response.getResponse();
+            }
+
+            throw new AiServiceException(
+                    "Ollama API trả về response rỗng cho model '" + ollamaCfg.getModel() + "'. "
+                    + "Kiểm tra model hoặc chuyển sang provider 'gemini'."
+            );
+
+        } catch (AiServiceException e) {
+            throw e;
+        } catch (WebClientResponseException.NotFound e) {
+            throw new AiServiceException(
+                    "Ollama endpoint không tìm thấy (404). URL: '" + ollamaCfg.getBaseUrl() + "'. "
+                    + "Kiểm tra Ollama đang chạy hoặc chuyển sang AI_PROVIDER=gemini.", e
+            );
+        } catch (WebClientResponseException e) {
+            throw new AiServiceException(
+                    "Ollama API lỗi HTTP " + e.getStatusCode() + ": " + e.getMessage(), e
+            );
+        } catch (Exception e) {
+            throw new AiServiceException(
+                    "Không thể kết nối đến Ollama tại '" + ollamaCfg.getBaseUrl() + "'. "
+                    + "Chi tiết: " + e.getMessage(), e
+            );
+        }
+    }
+
+    /**
+     * @deprecated Kiểm tra model Ollama local - chỉ dùng khi provider=ollama
+     */
+    @Deprecated(since = "2025-05", forRemoval = false)
+    private boolean isOllamaModelAvailable() {
         AiProperties.Ollama ollamaCfg = props.getOllama();
         try {
             OllamaTagsResponse response = ollamaWebClient.get()
@@ -138,139 +274,87 @@ public class OllamaClient {
                     .timeout(Duration.ofSeconds(Math.min(ollamaCfg.getTimeoutSeconds(), 10)))
                     .block();
 
-            boolean available = Optional.ofNullable(response)
+            boolean available = java.util.Optional.ofNullable(response)
                     .map(OllamaTagsResponse::getModels)
                     .orElse(List.of())
                     .stream()
-                    .anyMatch(tag -> ollamaCfg.getModel().equals(tag.getName()) || ollamaCfg.getModel().equals(tag.getModel()));
+                    .anyMatch(tag -> ollamaCfg.getModel().equals(tag.getName())
+                            || ollamaCfg.getModel().equals(tag.getModel()));
 
             if (!available) {
-                log.warn("Ollama is reachable at '{}', but model '{}' was not found in /api/tags.", ollamaCfg.getBaseUrl(), ollamaCfg.getModel());
+                log.warn("[DEPRECATED-OLLAMA] Ollama đang chạy tại '{}', nhưng model '{}' không tìm thấy.",
+                        ollamaCfg.getBaseUrl(), ollamaCfg.getModel());
             }
             return available;
-        } catch (WebClientResponseException.NotFound e) {
-            log.error("Ollama /api/tags returned 404. The configured base URL '{}' may not point to an Ollama server.", ollamaCfg.getBaseUrl());
-            return false;
         } catch (Exception e) {
-            log.error("Unable to validate Ollama model '{}' at '{}'. Error: {}", ollamaCfg.getModel(), ollamaCfg.getBaseUrl(), e.getMessage());
+            log.error("[DEPRECATED-OLLAMA] Không thể kết nối Ollama tại '{}': {}",
+                    ollamaCfg.getBaseUrl(), e.getMessage());
             return false;
         }
     }
 
-    private String buildFallbackResponse(String prompt) {
-        log.warn("Using structured rule-based fallback for AI evaluation");
-        String normalizedPrompt = prompt == null ? "" : prompt.toUpperCase(Locale.ROOT);
+    // =========================================================================
+    // DTOs - Ollama (deprecated, giữ lại cho backward compatibility)
+    // =========================================================================
 
-        if (normalizedPrompt.contains("CRITICAL") || normalizedPrompt.contains("HIGH")) {
-            return """
-                    {
-                      "status_evaluation": "Nhân viên đang có dấu hiệu quá tải đáng kể và cần được can thiệp sớm để giảm rủi ro kiệt sức.",
-                      "primary_reason": "Điểm tải công việc hoặc số tác vụ trễ hạn đang ở mức cao, cho thấy áp lực thực thi và khả năng tồn đọng đang tăng.",
-                      "recommendations": [
-                        "Tổ chức cuộc trao đổi 1-1 trong tuần này để xác định điểm nghẽn và mức hỗ trợ cần thiết.",
-                        "Tái phân bổ các tác vụ ưu tiên cao sang thành viên còn năng lực tiếp nhận.",
-                        "Tạm dừng giao thêm việc khẩn cấp cho đến khi các tác vụ tồn đọng được xử lý."
-                      ]
-                    }
-                    """;
-        }
-
-        if (normalizedPrompt.contains("MEDIUM")) {
-            return """
-                    {
-                      "status_evaluation": "Nhân viên đang ở vùng cần theo dõi, tải công việc chưa vượt ngưỡng nghiêm trọng nhưng đã có tín hiệu mất cân bằng.",
-                      "primary_reason": "Khối lượng công việc hoặc tác vụ trễ hạn bắt đầu tăng, có thể gây giảm tập trung nếu tiếp tục kéo dài.",
-                      "recommendations": [
-                        "Rà soát lại thứ tự ưu tiên backlog và giảm các tác vụ chuyển ngữ cảnh nhiều.",
-                        "Theo dõi tiến độ trong vài ngày tới để phát hiện sớm xu hướng quá tải.",
-                        "Trao đổi với nhóm trưởng trước khi giao thêm nhiệm vụ có độ ưu tiên cao."
-                      ]
-                    }
-                    """;
-        }
-
-        return """
-                {
-                  "status_evaluation": "Nhân viên đang duy trì nhịp làm việc ổn định, chưa có dấu hiệu rủi ro kiệt sức đáng kể.",
-                  "primary_reason": "Tải công việc và số tác vụ trễ hạn đang ở mức kiểm soát được so với năng lực hiện tại.",
-                  "recommendations": [
-                    "Duy trì nhịp làm việc hiện tại và tiếp tục theo dõi workload định kỳ.",
-                    "Ghi nhận đóng góp tích cực để củng cố động lực làm việc.",
-                    "Có thể giao thêm nhiệm vụ vừa phải nếu vẫn giữ được tiến độ ổn định."
-                  ]
-                }
-                """;
-    }
-
-    @Data
-    @Builder
-    @NoArgsConstructor
-    @AllArgsConstructor
+    /** @deprecated Ollama DTO - không dùng trong production */
+    @Data @Builder @NoArgsConstructor @AllArgsConstructor
+    @Deprecated(since = "2025-05")
     public static class OllamaRequest {
         private String model;
         private String prompt;
         private boolean stream;
     }
 
-    @Data
-    @NoArgsConstructor
-    @AllArgsConstructor
+    /** @deprecated Ollama DTO - không dùng trong production */
+    @Data @NoArgsConstructor @AllArgsConstructor
+    @Deprecated(since = "2025-05")
     public static class OllamaResponse {
         private String model;
         private String response;
         private boolean done;
     }
 
-    @Data
-    @NoArgsConstructor
-    @AllArgsConstructor
+    /** @deprecated Ollama DTO - không dùng trong production */
+    @Data @NoArgsConstructor @AllArgsConstructor
+    @Deprecated(since = "2025-05")
     public static class OllamaTagsResponse {
         private List<OllamaModelTag> models;
     }
 
-    @Data
-    @NoArgsConstructor
-    @AllArgsConstructor
+    /** @deprecated Ollama DTO - không dùng trong production */
+    @Data @NoArgsConstructor @AllArgsConstructor
+    @Deprecated(since = "2025-05")
     public static class OllamaModelTag {
         private String name;
         private String model;
     }
 
-    // Gemini DTOs
-    @Data
-    @Builder
-    @NoArgsConstructor
-    @AllArgsConstructor
+    // =========================================================================
+    // DTOs - Gemini (provider chính cho production)
+    // =========================================================================
+
+    @Data @Builder @NoArgsConstructor @AllArgsConstructor
     public static class GeminiRequest {
         private List<GeminiContent> contents;
     }
 
-    @Data
-    @Builder
-    @NoArgsConstructor
-    @AllArgsConstructor
+    @Data @Builder @NoArgsConstructor @AllArgsConstructor
     public static class GeminiContent {
         private List<GeminiPart> parts;
     }
 
-    @Data
-    @Builder
-    @NoArgsConstructor
-    @AllArgsConstructor
+    @Data @Builder @NoArgsConstructor @AllArgsConstructor
     public static class GeminiPart {
         private String text;
     }
 
-    @Data
-    @NoArgsConstructor
-    @AllArgsConstructor
+    @Data @NoArgsConstructor @AllArgsConstructor
     public static class GeminiResponse {
         private List<GeminiCandidate> candidates;
     }
 
-    @Data
-    @NoArgsConstructor
-    @AllArgsConstructor
+    @Data @NoArgsConstructor @AllArgsConstructor
     public static class GeminiCandidate {
         private GeminiContent content;
     }

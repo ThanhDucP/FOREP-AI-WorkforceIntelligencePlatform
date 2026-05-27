@@ -28,6 +28,12 @@ public class Task extends AuditableEntity {
     private LocalDateTime dueDate;
     private int estimatedHours;
 
+    @Enumerated(EnumType.STRING)
+    private com.aiworkforce.core.enums.IntegrationProvider sourceProvider = com.aiworkforce.core.enums.IntegrationProvider.INTERNAL;
+
+    /** External URL linking directly to the ticket/issue */
+    private String externalUrl;
+
     /** External ticket reference e.g. APX-2117, T-220 */
     private String externalTicketRef;
 

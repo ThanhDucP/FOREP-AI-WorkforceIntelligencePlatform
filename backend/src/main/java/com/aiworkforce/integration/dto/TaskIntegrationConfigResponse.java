@@ -1,0 +1,22 @@
+package com.aiworkforce.integration.dto;
+
+import com.aiworkforce.core.enums.IntegrationProvider;
+import lombok.Builder;
+import lombok.Data;
+
+import java.time.LocalDateTime;
+import java.util.UUID;
+
+@Data
+@Builder
+public class TaskIntegrationConfigResponse {
+    private UUID id;
+    private UUID teamId;
+    private IntegrationProvider provider;
+    private Boolean isActive;
+    private String projectKey;
+    private LocalDateTime createdAt;
+    private LocalDateTime updatedAt;
+    
+    // We intentionally do not expose webhookSecret and accessToken in responses
+}

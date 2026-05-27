@@ -17,4 +17,6 @@ public interface TaskRepository extends JpaRepository<Task, UUID> {
     List<Task> findByStatus(TaskStatus status);
     List<Task> findByStatusNotAndDueDateBefore(TaskStatus status, LocalDateTime dateTime);
     long countByStatus(TaskStatus status);
+    
+    java.util.Optional<Task> findByExternalTicketRefAndSourceProvider(String externalTicketRef, com.aiworkforce.core.enums.IntegrationProvider sourceProvider);
 }

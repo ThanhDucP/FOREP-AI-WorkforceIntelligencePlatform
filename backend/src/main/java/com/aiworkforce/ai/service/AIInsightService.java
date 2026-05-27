@@ -8,6 +8,7 @@ import com.aiworkforce.analytics.dto.DashboardResponse;
 import com.aiworkforce.analytics.service.DashboardAnalyticsService;
 import com.aiworkforce.core.enums.InsightSeverity;
 import com.aiworkforce.core.enums.InsightType;
+import com.aiworkforce.core.exception.AiServiceException;
 import com.aiworkforce.core.exception.ResourceNotFoundException;
 import com.aiworkforce.identity.entity.Employee;
 import com.aiworkforce.identity.entity.Team;
@@ -27,6 +28,22 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.List;
 import java.util.UUID;
 
+/**
+ * Service xử lý logic sinh AI Insight (phân tích burnout) cho nhân viên.
+ * <p>
+ * Luồng chính:
+ * 1. Lấy dữ liệu analytics của nhân viên
+ * 2. Xây dựng prompt từ dữ liệu
+ * 3. Gọi AI (Gemini) qua OllamaClient để sinh insight
+ * 4. Parse + normalize JSON response
+ * 5. Lưu insight vào database
+ * <p>
+ * <b>Xử lý lỗi:</b>
+ * - Nếu AI không kết nối được → throw {@link AiServiceException} (HTTP 503)
+ * - Nếu prompt lỗi → throw {@link IllegalArgumentException} (HTTP 400)
+ * - Nếu AI trả về JSON không hợp lệ → dùng fallback dựa trên dữ liệu analytics thực tế
+ *   (đây KHÔNG phải mock - là phân tích rule-based dựa trên data thật)
+ */
 @Service
 @RequiredArgsConstructor
 @Slf4j
@@ -42,6 +59,17 @@ public class AIInsightService {
     private final EmployeeService employeeService;
     private final AIInsightRepository insightRepository;
 
+    /**
+     * Sinh AI insight cho nhân viên dựa trên dữ liệu analytics.
+     * <p>
+     * Gọi Gemini AI thật để phân tích - KHÔNG dùng mock/fake data.
+     * Nếu AI không khả dụng, exception sẽ được propagate lên controller.
+     *
+     * @param employeeId UUID của nhân viên cần phân tích
+     * @return AIInsight đã được lưu vào database
+     * @throws ResourceNotFoundException nếu không tìm thấy nhân viên
+     * @throws AiServiceException nếu không kết nối được AI hoặc AI trả về lỗi
+     */
     @Transactional
     public AIInsight generateInsightForEmployee(UUID employeeId) {
         Employee employee = employeeRepository.findById(employeeId)
@@ -49,8 +77,23 @@ public class AIInsightService {
 
         DashboardResponse analytics = analyticsService.getEmployeeDashboard(employeeId);
 
-        String prompt = promptBuilder.buildBurnoutPrompt(employee.getFirstName() + " " + employee.getLastName(), analytics);
-        String aiResponse = ollamaClient.generateInsight(prompt);
+        // Xây dựng prompt từ dữ liệu thật
+        String prompt = promptBuilder.buildBurnoutPrompt(
+                employee.getFirstName() + " " + employee.getLastName(), analytics);
+
+        // Gọi AI - sẽ throw AiServiceException nếu lỗi kết nối/prompt
+        String aiResponse;
+        try {
+            aiResponse = ollamaClient.generateInsight(prompt);
+        } catch (AiServiceException e) {
+            log.error("Lỗi khi gọi AI service cho nhân viên {}: {}", employeeId, e.getMessage());
+            throw e; // Propagate lên controller để trả HTTP 503
+        } catch (IllegalArgumentException e) {
+            log.error("Lỗi prompt cho nhân viên {}: {}", employeeId, e.getMessage());
+            throw e; // Propagate lên controller để trả HTTP 400
+        }
+
+        // Parse và normalize response JSON từ AI
         ObjectNode normalizedInsight = normalizeInsightJson(aiResponse, analytics);
         String summaryText = normalizedInsight.get("status_evaluation").asText();
         String fullAnalysis = normalizedInsight.toPrettyString();
@@ -81,6 +124,13 @@ public class AIInsightService {
         return cleaned.trim();
     }
 
+    /**
+     * Normalize JSON response từ AI.
+     * <p>
+     * Nếu AI trả về JSON hợp lệ nhưng thiếu một số field → bổ sung từ analytics data thật.
+     * Nếu AI trả về text không phải JSON → tạo insight dựa trên rule-based analysis
+     * (KHÔNG phải mock - sử dụng dữ liệu analytics thực tế để đánh giá).
+     */
     private ObjectNode normalizeInsightJson(String response, DashboardResponse analytics) {
         String jsonCandidate = extractJsonObject(cleanJsonResponse(response));
 
@@ -96,8 +146,8 @@ public class AIInsightService {
             ensureRecommendations(normalized, analytics);
             return normalized;
         } catch (Exception e) {
-            log.error("Failed to parse AI response JSON: {}. Using structured fallback insight.", e.getMessage());
-            return buildFallbackInsight(analytics);
+            log.warn("AI response không phải JSON hợp lệ: {}. Sử dụng phân tích rule-based từ dữ liệu thật.", e.getMessage());
+            return buildRuleBasedInsight(analytics);
         }
     }
 
@@ -129,19 +179,32 @@ public class AIInsightService {
         }
 
         ArrayNode fallback = OBJECT_MAPPER.createArrayNode();
-        fallbackRecommendations(analytics).forEach(fallback::add);
+        ruleBasedRecommendations(analytics).forEach(fallback::add);
         node.set("recommendations", fallback);
     }
 
-    private ObjectNode buildFallbackInsight(DashboardResponse analytics) {
-        ObjectNode fallback = OBJECT_MAPPER.createObjectNode();
-        fallback.put("status_evaluation", fallbackStatusEvaluation(analytics));
-        fallback.put("primary_reason", fallbackPrimaryReason(analytics));
+    /**
+     * Tạo insight dựa trên phân tích rule-based từ dữ liệu analytics thật.
+     * <p>
+     * Đây KHÔNG phải mock data. Insight được sinh ra dựa trên:
+     * - Workload score thực tế
+     * - Số tác vụ trễ hạn thực tế
+     * - Số tác vụ hoàn thành thực tế
+     * - Mức burnout risk level từ hệ thống phân tích
+     * <p>
+     * Được sử dụng khi AI trả về text không parse được thành JSON,
+     * nhưng kết nối AI vẫn thành công (không phải lỗi kết nối).
+     */
+    private ObjectNode buildRuleBasedInsight(DashboardResponse analytics) {
+        ObjectNode insight = OBJECT_MAPPER.createObjectNode();
+        insight.put("status_evaluation", fallbackStatusEvaluation(analytics));
+        insight.put("primary_reason", fallbackPrimaryReason(analytics));
+        insight.put("_source", "rule-based-analysis"); // Đánh dấu nguồn là rule-based, không phải AI
 
         ArrayNode recommendations = OBJECT_MAPPER.createArrayNode();
-        fallbackRecommendations(analytics).forEach(recommendations::add);
-        fallback.set("recommendations", recommendations);
-        return fallback;
+        ruleBasedRecommendations(analytics).forEach(recommendations::add);
+        insight.set("recommendations", recommendations);
+        return insight;
     }
 
     private String fallbackStatusEvaluation(DashboardResponse analytics) {
@@ -162,7 +225,7 @@ public class AIInsightService {
         );
     }
 
-    private List<String> fallbackRecommendations(DashboardResponse analytics) {
+    private List<String> ruleBasedRecommendations(DashboardResponse analytics) {
         InsightSeverity severity = resolveSeverity(analytics.getBurnoutRiskLevel());
         return switch (severity) {
             case CRITICAL, HIGH -> List.of(
