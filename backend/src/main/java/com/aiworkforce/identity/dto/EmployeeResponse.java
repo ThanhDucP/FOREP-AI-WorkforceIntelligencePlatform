@@ -18,6 +18,7 @@ public class EmployeeResponse {
     private String jobTitle;
     private String phoneNumber;
     private String email;
+    private String avatarUrl;
     private UUID teamId;
     private String teamName;
     private String role;

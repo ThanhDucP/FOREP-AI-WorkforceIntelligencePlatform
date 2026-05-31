@@ -12,6 +12,8 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 import java.util.UUID;
+import com.aiworkforce.integration.dto.IntegrationConnectRequest;
+import com.aiworkforce.integration.dto.IntegrationConnectResponse;
 
 @RestController
 @RequestMapping("/api/v1/integrations")
@@ -25,6 +27,14 @@ public class TaskIntegrationController {
     public ResponseEntity<ApiResponse<TaskIntegrationConfigResponse>> createConfig(
             @Valid @RequestBody TaskIntegrationConfigRequest request) {
         return ResponseEntity.ok(ApiResponse.success(integrationService.createConfig(request)));
+    }
+
+    @PostMapping("/connect")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
+    public ResponseEntity<ApiResponse<IntegrationConnectResponse>> connect(
+            @Valid @RequestBody IntegrationConnectRequest request) {
+        IntegrationConnectResponse resp = integrationService.connectWithKey(request);
+        return ResponseEntity.ok(ApiResponse.success(resp));
     }
 
     @GetMapping("/team/{teamId}")

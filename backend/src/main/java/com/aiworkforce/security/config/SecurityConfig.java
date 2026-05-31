@@ -1,6 +1,8 @@
 package com.aiworkforce.security.config;
 
 import com.aiworkforce.security.filter.JwtAuthenticationFilter;
+import com.aiworkforce.security.oauth2.OAuth2LoginFailureHandler;
+import com.aiworkforce.security.oauth2.OAuth2LoginSuccessHandler;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -28,6 +30,8 @@ public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtAuthFilter;
     private final UserDetailsService userDetailsService;
+        private final OAuth2LoginSuccessHandler oauth2LoginSuccessHandler;
+        private final OAuth2LoginFailureHandler oauth2LoginFailureHandler;
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http)
@@ -44,7 +48,7 @@ public class SecurityConfig {
 
                 .sessionManagement(sess ->
                         sess.sessionCreationPolicy(
-                                SessionCreationPolicy.STATELESS
+                                SessionCreationPolicy.IF_REQUIRED
                         )
                 )
 
@@ -54,6 +58,10 @@ public class SecurityConfig {
                         .requestMatchers(
                                 "/api/v1/auth/login",
                                 "/api/v1/auth/register",
+                                "/api/v1/auth/oauth2/**",
+
+                                "/oauth2/**",
+                                "/login/oauth2/**",
 
                                 "/v3/api-docs",
                                 "/v3/api-docs/**",
@@ -85,6 +93,11 @@ public class SecurityConfig {
                 ))
 
                 .authenticationProvider(authenticationProvider())
+
+                .oauth2Login(oauth2 -> oauth2
+                        .successHandler(oauth2LoginSuccessHandler)
+                        .failureHandler(oauth2LoginFailureHandler)
+                )
 
                 .addFilterBefore(
                         jwtAuthFilter,

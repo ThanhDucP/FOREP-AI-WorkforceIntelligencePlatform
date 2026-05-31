@@ -125,6 +125,7 @@ public class EmployeeService {
                 .jobTitle(employee.getJobTitle())
                 .phoneNumber(employee.getPhoneNumber())
                 .email(employee.getAccount() != null ? employee.getAccount().getEmail() : null)
+            .avatarUrl(employee.getAccount() != null ? employee.getAccount().getAvatarUrl() : null)
                 .teamId(employee.getTeam() != null ? employee.getTeam().getId() : null)
                 .teamName(employee.getTeam() != null ? employee.getTeam().getName() : null)
                 .role(employee.getAccount() != null && employee.getAccount().getRole() != null ? employee.getAccount().getRole().getName().name() : null)

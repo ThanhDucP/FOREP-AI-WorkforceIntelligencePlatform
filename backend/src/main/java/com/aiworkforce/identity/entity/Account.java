@@ -14,6 +14,12 @@ public class Account extends AuditableEntity {
     
     @Column(nullable = false)
     private String password;
+
+    @Column(name = "google_id", unique = true)
+    private String googleId;
+
+    @Column(name = "github_id", unique = true)
+    private String githubId;
     
     private boolean active = true;
     private boolean locked = false;

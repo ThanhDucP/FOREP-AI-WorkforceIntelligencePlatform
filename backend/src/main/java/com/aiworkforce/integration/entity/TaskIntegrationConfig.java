@@ -31,4 +31,7 @@ public class TaskIntegrationConfig extends AuditableEntity {
 
     // Optional config details like GitHub repository name ("owner/repo") or Jira project key
     private String projectKey; 
+    
+    // ID returned by provider when webhook is created (optional)
+    private String providerWebhookId;
 }

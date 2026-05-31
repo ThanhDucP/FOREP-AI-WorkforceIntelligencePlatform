@@ -4,6 +4,8 @@ import com.aiworkforce.core.exception.ResourceNotFoundException;
 import com.aiworkforce.identity.entity.Team;
 import com.aiworkforce.identity.repository.TeamRepository;
 import com.aiworkforce.integration.dto.TaskIntegrationConfigRequest;
+import com.aiworkforce.integration.dto.IntegrationConnectRequest;
+import com.aiworkforce.integration.dto.IntegrationConnectResponse;
 import com.aiworkforce.integration.dto.TaskIntegrationConfigResponse;
 import com.aiworkforce.integration.entity.TaskIntegrationConfig;
 import com.aiworkforce.integration.repository.TaskIntegrationConfigRepository;
@@ -23,6 +25,7 @@ public class TaskIntegrationService {
     private final TeamRepository teamRepository;
     private final GithubApiClient githubApiClient;
     private final JiraApiClient jiraApiClient;
+    private final GithubWebhookRegistrar githubWebhookRegistrar;
 
     @Transactional
     public void syncTasks(UUID configId) {
@@ -34,6 +37,57 @@ public class TaskIntegrationService {
         } else {
             throw new IllegalArgumentException("Unsupported sync provider: " + config.getProvider());
         }
+    }
+
+    @Transactional
+    public IntegrationConnectResponse connectWithKey(IntegrationConnectRequest request) {
+        Team team = teamRepository.findById(request.getTeamId())
+                .orElseThrow(() -> new ResourceNotFoundException("Team not found"));
+
+        TaskIntegrationConfig config = new TaskIntegrationConfig();
+        config.setTeam(team);
+        config.setProvider(request.getProvider());
+        // generate webhook secret
+        String webhookSecret = java.util.Base64.getUrlEncoder().withoutPadding().encodeToString(
+                java.security.SecureRandom.getInstanceStrong().generateSeed(24));
+        config.setWebhookSecret(webhookSecret);
+        config.setAccessToken(request.getConnectionKey());
+        config.setProjectKey(request.getProjectKey());
+        config.setIsActive(false);
+
+        TaskIntegrationConfig saved = configRepository.save(config);
+
+        String ownerRepo = request.getProjectKey();
+        String payloadUrl = String.format("%s/api/v1/webhooks/github/%s", getAppBaseUrl(), saved.getId().toString());
+
+        GithubWebhookRegistrar.RegistrationResult res = githubWebhookRegistrar.createRepoWebhook(
+                ownerRepo, request.getConnectionKey(), payloadUrl, webhookSecret
+        );
+
+        IntegrationConnectResponse resp = new IntegrationConnectResponse();
+        resp.setConfigId(saved.getId().toString());
+        resp.setWebhookUrl(payloadUrl);
+        resp.setWebhookSecret(webhookSecret);
+
+        if (res.registered) {
+            saved.setIsActive(true);
+            if (res.webhookId != null) saved.setProviderWebhookId(res.webhookId);
+            configRepository.save(saved);
+            resp.setWebhookRegistered(true);
+            resp.setMessage("Webhook registered automatically");
+        } else {
+            resp.setWebhookRegistered(false);
+            resp.setMessage("Auto-registration failed: " + res.message);
+        }
+
+        return resp;
+    }
+
+    // Helper to derive app base url from env or default; production should set APP_BASE_URL
+    private String getAppBaseUrl() {
+        String url = System.getenv("APP_BASE_URL");
+        if (url != null && !url.isBlank()) return url.replaceAll("/+$", "");
+        return "https://localhost:8080";
     }
 
     @Transactional
