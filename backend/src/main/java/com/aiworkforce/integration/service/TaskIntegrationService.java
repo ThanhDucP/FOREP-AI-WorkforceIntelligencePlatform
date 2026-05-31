@@ -21,6 +21,20 @@ public class TaskIntegrationService {
 
     private final TaskIntegrationConfigRepository configRepository;
     private final TeamRepository teamRepository;
+    private final GithubApiClient githubApiClient;
+    private final JiraApiClient jiraApiClient;
+
+    @Transactional
+    public void syncTasks(UUID configId) {
+        TaskIntegrationConfig config = getActiveConfigById(configId);
+        if (config.getProvider() == com.aiworkforce.core.enums.IntegrationProvider.GITHUB) {
+            githubApiClient.syncIssues(config);
+        } else if (config.getProvider() == com.aiworkforce.core.enums.IntegrationProvider.JIRA) {
+            jiraApiClient.syncIssues(config);
+        } else {
+            throw new IllegalArgumentException("Unsupported sync provider: " + config.getProvider());
+        }
+    }
 
     @Transactional
     public TaskIntegrationConfigResponse createConfig(TaskIntegrationConfigRequest request) {

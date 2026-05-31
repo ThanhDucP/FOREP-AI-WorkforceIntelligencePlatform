@@ -48,4 +48,11 @@ public class TaskIntegrationController {
         integrationService.deleteConfig(id);
         return ResponseEntity.ok(ApiResponse.success(null));
     }
+
+    @PostMapping("/{id}/sync")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'EMPLOYEE')")
+    public ResponseEntity<ApiResponse<String>> syncTasks(@PathVariable UUID id) {
+        integrationService.syncTasks(id);
+        return ResponseEntity.ok(ApiResponse.success("Sync completed successfully"));
+    }
 }
