@@ -13,6 +13,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.security.SecureRandom;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -48,8 +49,9 @@ public class TaskIntegrationService {
         config.setTeam(team);
         config.setProvider(request.getProvider());
         // generate webhook secret
-        String webhookSecret = java.util.Base64.getUrlEncoder().withoutPadding().encodeToString(
-                java.security.SecureRandom.getInstanceStrong().generateSeed(24));
+        byte[] randomBytes = new byte[24];
+        new SecureRandom().nextBytes(randomBytes);
+        String webhookSecret = java.util.Base64.getUrlEncoder().withoutPadding().encodeToString(randomBytes);
         config.setWebhookSecret(webhookSecret);
         config.setAccessToken(request.getConnectionKey());
         config.setProjectKey(request.getProjectKey());

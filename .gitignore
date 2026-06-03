@@ -34,3 +34,10 @@ target/
 *.iws
 *.ipr
 out/
+
+# Keep repository backend-focused
+.postman/
+postman/
+node_modules/
+build_collection.js
+forep_api_collection_built.json
