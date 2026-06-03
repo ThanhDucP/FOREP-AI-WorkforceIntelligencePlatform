@@ -2,7 +2,7 @@ spring:
   application:
     name: ai-workforce-api
   profiles:
-    active: dev
+    active: ${SPRING_PROFILES_ACTIVE:dev}
   
   datasource:
     driver-class-name: org.postgresql.Driver
@@ -40,7 +40,7 @@ ai:
 spring:
   config:
     activate:
-      on-profile: oauth2
+      on-profile: oauth2-google
   security:
     oauth2:
       client:
@@ -52,6 +52,16 @@ spring:
               - openid
               - profile
               - email
+
+---
+spring:
+  config:
+    activate:
+      on-profile: oauth2-github
+  security:
+    oauth2:
+      client:
+        registration:
           github:
             client-id: ${GITHUB_CLIENT_ID}
             client-secret: ${GITHUB_CLIENT_SECRET}

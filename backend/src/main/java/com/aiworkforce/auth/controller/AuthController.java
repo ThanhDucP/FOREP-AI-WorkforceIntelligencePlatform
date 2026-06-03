@@ -8,13 +8,14 @@ import com.aiworkforce.auth.service.AuthService;
 import com.aiworkforce.core.response.ApiResponse;
 import com.aiworkforce.identity.dto.EmployeeResponse;
 import com.aiworkforce.identity.service.EmployeeService;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.oauth2.client.registration.ClientRegistrationRepository;
 import org.springframework.web.bind.annotation.*;
-
-import jakarta.servlet.http.HttpServletRequest;
 
 import java.io.IOException;
 
@@ -25,6 +26,7 @@ public class AuthController {
 
     private final AuthService authService;
     private final EmployeeService employeeService;
+    private final ObjectProvider<ClientRegistrationRepository> clientRegistrationRepository;
 
     @PostMapping("/register")
     public ResponseEntity<ApiResponse<AuthResponse>> register(@RequestBody @Valid RegisterRequest request) {
@@ -51,12 +53,34 @@ public class AuthController {
 
     @GetMapping("/oauth2/google")
     public void googleLogin(HttpServletResponse response) throws IOException {
+        if (!isOAuth2ProviderConfigured("google")) {
+            response.sendError(
+                    HttpServletResponse.SC_SERVICE_UNAVAILABLE,
+                    "Google OAuth2 is not configured. Set SPRING_PROFILES_ACTIVE=dev,oauth2-google and provide GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET."
+            );
+            return;
+        }
+
         response.sendRedirect("/oauth2/authorization/google");
     }
 
     @GetMapping("/oauth2/github")
     public void githubLogin(HttpServletResponse response) throws IOException {
+        if (!isOAuth2ProviderConfigured("github")) {
+            response.sendError(
+                    HttpServletResponse.SC_SERVICE_UNAVAILABLE,
+                    "GitHub OAuth2 is not configured. Set SPRING_PROFILES_ACTIVE=dev,oauth2-github and provide GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET."
+            );
+            return;
+        }
+
         response.sendRedirect("/oauth2/authorization/github");
+    }
+
+    private boolean isOAuth2ProviderConfigured(String registrationId) {
+        ClientRegistrationRepository repository = clientRegistrationRepository.getIfAvailable();
+
+        return repository != null && repository.findByRegistrationId(registrationId) != null;
     }
 
     @PostMapping("/logout")
