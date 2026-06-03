@@ -8,6 +8,7 @@ import com.aiworkforce.auth.service.AuthService;
 import com.aiworkforce.core.response.ApiResponse;
 import com.aiworkforce.identity.dto.EmployeeResponse;
 import com.aiworkforce.identity.service.EmployeeService;
+import com.aiworkforce.security.oauth2.OAuth2Properties;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
@@ -27,6 +28,7 @@ public class AuthController {
     private final AuthService authService;
     private final EmployeeService employeeService;
     private final ObjectProvider<ClientRegistrationRepository> clientRegistrationRepository;
+    private final OAuth2Properties oauth2Properties;
 
     @PostMapping("/register")
     public ResponseEntity<ApiResponse<AuthResponse>> register(@RequestBody @Valid RegisterRequest request) {
@@ -44,8 +46,8 @@ public class AuthController {
                 + (request.getServerPort() == 80 || request.getServerPort() == 443 ? "" : ":" + request.getServerPort());
 
         OAuth2LoginLinksResponse response = OAuth2LoginLinksResponse.builder()
-                .google(baseUrl + "/api/v1/auth/oauth2/google")
-                .github(baseUrl + "/api/v1/auth/oauth2/github")
+                .google(isOAuth2ProviderConfigured("google") ? baseUrl + "/api/v1/auth/oauth2/google" : null)
+                .github(isOAuth2ProviderConfigured("github") ? baseUrl + "/api/v1/auth/oauth2/github" : null)
                 .build();
 
         return ResponseEntity.ok(ApiResponse.success(response, "OAuth2 login links"));
@@ -78,6 +80,10 @@ public class AuthController {
     }
 
     private boolean isOAuth2ProviderConfigured(String registrationId) {
+        if (!oauth2Properties.isEnabled()) {
+            return false;
+        }
+
         ClientRegistrationRepository repository = clientRegistrationRepository.getIfAvailable();
 
         return repository != null && repository.findByRegistrationId(registrationId) != null;

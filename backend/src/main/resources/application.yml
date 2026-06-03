@@ -22,6 +22,7 @@ app:
       access-token-expiration: 86400000 # 1 day
       refresh-token-expiration: 604800000 # 7 days
     oauth2:
+      enabled: false
       success-redirect-uri: ${OAUTH2_SUCCESS_REDIRECT_URI:http://localhost:3000/auth/oauth2/callback}
       failure-redirect-uri: ${OAUTH2_FAILURE_REDIRECT_URI:http://localhost:3000/login?oauth2=failed}
 
@@ -52,6 +53,10 @@ spring:
               - openid
               - profile
               - email
+app:
+  security:
+    oauth2:
+      enabled: true
 
 ---
 spring:
@@ -71,3 +76,7 @@ spring:
         provider:
           github:
             user-name-attribute: id
+app:
+  security:
+    oauth2:
+      enabled: true

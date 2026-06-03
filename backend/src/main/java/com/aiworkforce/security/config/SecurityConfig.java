@@ -2,6 +2,7 @@ package com.aiworkforce.security.config;
 
 import com.aiworkforce.security.filter.JwtAuthenticationFilter;
 import com.aiworkforce.security.oauth2.OAuth2LoginFailureHandler;
+import com.aiworkforce.security.oauth2.OAuth2Properties;
 import com.aiworkforce.security.oauth2.OAuth2LoginSuccessHandler;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.ObjectProvider;
@@ -18,7 +19,6 @@ import org.springframework.security.config.annotation.web.configuration.WebSecur
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.core.userdetails.UserDetailsService;
-import org.springframework.security.oauth2.client.registration.ClientRegistrationRepository;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
@@ -32,7 +32,7 @@ public class SecurityConfig {
     private final UserDetailsService userDetailsService;
     private final ObjectProvider<OAuth2LoginSuccessHandler> oauth2LoginSuccessHandler;
     private final ObjectProvider<OAuth2LoginFailureHandler> oauth2LoginFailureHandler;
-    private final ObjectProvider<ClientRegistrationRepository> clientRegistrationRepository;
+    private final OAuth2Properties oauth2Properties;
     private final org.springframework.security.crypto.password.PasswordEncoder passwordEncoder;
 
     @Bean
@@ -96,7 +96,7 @@ public class SecurityConfig {
 
                 .authenticationProvider(authenticationProvider());
 
-        if (clientRegistrationRepository.getIfAvailable() != null) {
+        if (oauth2Properties.isEnabled()) {
             http.oauth2Login(oauth2 -> oauth2
                     .successHandler(oauth2LoginSuccessHandler.getObject())
                     .failureHandler(oauth2LoginFailureHandler.getObject())

@@ -11,6 +11,7 @@ import org.springframework.stereotype.Component;
 @Setter
 public class OAuth2Properties {
 
+    private boolean enabled = false;
     private String successRedirectUri = "http://localhost:3000/auth/oauth2/callback";
     private String failureRedirectUri = "http://localhost:3000/login?oauth2=failed";
 }
