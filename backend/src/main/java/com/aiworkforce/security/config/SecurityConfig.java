@@ -17,8 +17,6 @@ import org.springframework.security.config.annotation.web.configuration.WebSecur
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.core.userdetails.UserDetailsService;
-import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
-import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
@@ -32,6 +30,7 @@ public class SecurityConfig {
     private final UserDetailsService userDetailsService;
         private final OAuth2LoginSuccessHandler oauth2LoginSuccessHandler;
         private final OAuth2LoginFailureHandler oauth2LoginFailureHandler;
+        private final org.springframework.security.crypto.password.PasswordEncoder passwordEncoder;
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http)
@@ -133,7 +132,7 @@ public class SecurityConfig {
 
         authProvider.setUserDetailsService(userDetailsService);
 
-        authProvider.setPasswordEncoder(passwordEncoder());
+                authProvider.setPasswordEncoder(passwordEncoder);
 
         return authProvider;
     }
@@ -146,9 +145,4 @@ public class SecurityConfig {
         return config.getAuthenticationManager();
     }
 
-    @Bean
-    public PasswordEncoder passwordEncoder() {
-
-        return new BCryptPasswordEncoder();
-    }
 }
