@@ -4,6 +4,7 @@ import com.aiworkforce.security.filter.JwtAuthenticationFilter;
 import com.aiworkforce.security.oauth2.OAuth2LoginFailureHandler;
 import com.aiworkforce.security.oauth2.OAuth2LoginSuccessHandler;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -17,6 +18,7 @@ import org.springframework.security.config.annotation.web.configuration.WebSecur
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.security.oauth2.client.registration.ClientRegistrationRepository;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
@@ -28,9 +30,10 @@ public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtAuthFilter;
     private final UserDetailsService userDetailsService;
-        private final OAuth2LoginSuccessHandler oauth2LoginSuccessHandler;
-        private final OAuth2LoginFailureHandler oauth2LoginFailureHandler;
-        private final org.springframework.security.crypto.password.PasswordEncoder passwordEncoder;
+    private final ObjectProvider<OAuth2LoginSuccessHandler> oauth2LoginSuccessHandler;
+    private final ObjectProvider<OAuth2LoginFailureHandler> oauth2LoginFailureHandler;
+    private final ObjectProvider<ClientRegistrationRepository> clientRegistrationRepository;
+    private final org.springframework.security.crypto.password.PasswordEncoder passwordEncoder;
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http)
@@ -91,17 +94,19 @@ public class SecurityConfig {
                                 )
                 ))
 
-                .authenticationProvider(authenticationProvider())
+                .authenticationProvider(authenticationProvider());
 
-                .oauth2Login(oauth2 -> oauth2
-                        .successHandler(oauth2LoginSuccessHandler)
-                        .failureHandler(oauth2LoginFailureHandler)
-                )
+        if (clientRegistrationRepository.getIfAvailable() != null) {
+            http.oauth2Login(oauth2 -> oauth2
+                    .successHandler(oauth2LoginSuccessHandler.getObject())
+                    .failureHandler(oauth2LoginFailureHandler.getObject())
+            );
+        }
 
-                .addFilterBefore(
-                        jwtAuthFilter,
-                        UsernamePasswordAuthenticationFilter.class
-                );
+        http.addFilterBefore(
+                jwtAuthFilter,
+                UsernamePasswordAuthenticationFilter.class
+        );
 
         return http.build();
     }
@@ -132,7 +137,7 @@ public class SecurityConfig {
 
         authProvider.setUserDetailsService(userDetailsService);
 
-                authProvider.setPasswordEncoder(passwordEncoder);
+        authProvider.setPasswordEncoder(passwordEncoder);
 
         return authProvider;
     }
