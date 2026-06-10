@@ -6,6 +6,7 @@ import com.aiworkforce.identity.repository.EmployeeRepository;
 import com.aiworkforce.integration.entity.TaskIntegrationConfig;
 import com.aiworkforce.task.entity.Task;
 import com.aiworkforce.task.repository.TaskRepository;
+import com.aiworkforce.task.service.TaskAssessmentService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -45,7 +46,7 @@ public class GithubWebhookProcessorTest {
     @BeforeEach
     void setUp() {
         objectMapper = new ObjectMapper();
-        processor = new GithubWebhookProcessor(objectMapper, taskRepository, employeeRepository);
+        processor = new GithubWebhookProcessor(objectMapper, taskRepository, employeeRepository, new TaskAssessmentService());
         
         config = new TaskIntegrationConfig();
         config.setWebhookSecret(secret);

@@ -1,5 +1,6 @@
 package com.aiworkforce.integration.service;
 
+import com.aiworkforce.core.enums.IntegrationProvider;
 import com.aiworkforce.core.exception.ResourceNotFoundException;
 import com.aiworkforce.identity.entity.Team;
 import com.aiworkforce.identity.repository.TeamRepository;
@@ -31,13 +32,7 @@ public class TaskIntegrationService {
     @Transactional
     public void syncTasks(UUID configId) {
         TaskIntegrationConfig config = getActiveConfigById(configId);
-        if (config.getProvider() == com.aiworkforce.core.enums.IntegrationProvider.GITHUB) {
-            githubApiClient.syncIssues(config);
-        } else if (config.getProvider() == com.aiworkforce.core.enums.IntegrationProvider.JIRA) {
-            jiraApiClient.syncIssues(config);
-        } else {
-            throw new IllegalArgumentException("Unsupported sync provider: " + config.getProvider());
-        }
+        syncConfig(config);
     }
 
     @Transactional
@@ -55,31 +50,41 @@ public class TaskIntegrationService {
         config.setWebhookSecret(webhookSecret);
         config.setAccessToken(request.getConnectionKey());
         config.setProjectKey(request.getProjectKey());
-        config.setIsActive(false);
+        config.setIsActive(request.getProvider() == IntegrationProvider.JIRA);
 
         TaskIntegrationConfig saved = configRepository.save(config);
 
-        String ownerRepo = request.getProjectKey();
-        String payloadUrl = String.format("%s/api/v1/webhooks/github/%s", getAppBaseUrl(), saved.getId().toString());
-
-        GithubWebhookRegistrar.RegistrationResult res = githubWebhookRegistrar.createRepoWebhook(
-                ownerRepo, request.getConnectionKey(), payloadUrl, webhookSecret
-        );
-
         IntegrationConnectResponse resp = new IntegrationConnectResponse();
         resp.setConfigId(saved.getId().toString());
-        resp.setWebhookUrl(payloadUrl);
         resp.setWebhookSecret(webhookSecret);
 
-        if (res.registered) {
-            saved.setIsActive(true);
-            if (res.webhookId != null) saved.setProviderWebhookId(res.webhookId);
-            configRepository.save(saved);
+        if (request.getProvider() == IntegrationProvider.GITHUB) {
+            String ownerRepo = request.getProjectKey();
+            String payloadUrl = String.format("%s/api/v1/webhooks/github/%s", getAppBaseUrl(), saved.getId().toString());
+            resp.setWebhookUrl(payloadUrl);
+
+            GithubWebhookRegistrar.RegistrationResult res = githubWebhookRegistrar.createRepoWebhook(
+                    ownerRepo, request.getConnectionKey(), payloadUrl, webhookSecret
+            );
+
+            if (res.registered) {
+                saved.setIsActive(true);
+                if (res.webhookId != null) saved.setProviderWebhookId(res.webhookId);
+                saved = configRepository.save(saved);
+                githubApiClient.syncIssues(saved);
+                resp.setWebhookRegistered(true);
+                resp.setMessage("Webhook registered automatically and GitHub tasks synced");
+            } else {
+                resp.setWebhookRegistered(false);
+                resp.setMessage("Auto-registration failed: " + res.message);
+            }
+        } else if (request.getProvider() == IntegrationProvider.JIRA) {
+            jiraApiClient.syncIssues(saved);
             resp.setWebhookRegistered(true);
-            resp.setMessage("Webhook registered automatically");
+            resp.setMessage("Jira connected and tasks synced");
         } else {
             resp.setWebhookRegistered(false);
-            resp.setMessage("Auto-registration failed: " + res.message);
+            resp.setMessage("Unsupported provider: " + request.getProvider());
         }
 
         return resp;
@@ -105,7 +110,11 @@ public class TaskIntegrationService {
         config.setProjectKey(request.getProjectKey());
         config.setIsActive(request.getIsActive() != null ? request.getIsActive() : true);
 
-        return mapToResponse(configRepository.save(config));
+        TaskIntegrationConfig saved = configRepository.save(config);
+        if (Boolean.TRUE.equals(saved.getIsActive())) {
+            syncConfig(saved);
+        }
+        return mapToResponse(saved);
     }
 
     public List<TaskIntegrationConfigResponse> getConfigsByTeam(UUID teamId) {
@@ -160,5 +169,15 @@ public class TaskIntegrationService {
                 .createdAt(config.getCreatedAt())
                 .updatedAt(config.getUpdatedAt())
                 .build();
+    }
+
+    private void syncConfig(TaskIntegrationConfig config) {
+        if (config.getProvider() == IntegrationProvider.GITHUB) {
+            githubApiClient.syncIssues(config);
+        } else if (config.getProvider() == IntegrationProvider.JIRA) {
+            jiraApiClient.syncIssues(config);
+        } else {
+            throw new IllegalArgumentException("Unsupported sync provider: " + config.getProvider());
+        }
     }
 }

@@ -7,6 +7,7 @@ import com.aiworkforce.identity.repository.EmployeeRepository;
 import com.aiworkforce.integration.entity.TaskIntegrationConfig;
 import com.aiworkforce.task.entity.Task;
 import com.aiworkforce.task.repository.TaskRepository;
+import com.aiworkforce.task.service.TaskAssessmentService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sun.net.httpserver.HttpServer;
 import org.junit.jupiter.api.AfterEach;
@@ -44,7 +45,7 @@ public class GithubApiClientTest {
     @BeforeEach
     void setUp() {
         objectMapper = new ObjectMapper();
-        githubApiClient = new GithubApiClient(taskRepository, employeeRepository, objectMapper);
+        githubApiClient = new GithubApiClient(taskRepository, employeeRepository, objectMapper, new TaskAssessmentService());
     }
 
     @AfterEach

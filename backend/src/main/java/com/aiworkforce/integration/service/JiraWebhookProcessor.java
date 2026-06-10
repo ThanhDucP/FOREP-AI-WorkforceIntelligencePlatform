@@ -1,12 +1,14 @@
 package com.aiworkforce.integration.service;
 
 import com.aiworkforce.core.enums.IntegrationProvider;
+import com.aiworkforce.core.enums.TaskPriority;
 import com.aiworkforce.core.enums.TaskStatus;
 import com.aiworkforce.identity.entity.Employee;
 import com.aiworkforce.identity.repository.EmployeeRepository;
 import com.aiworkforce.integration.entity.TaskIntegrationConfig;
 import com.aiworkforce.task.entity.Task;
 import com.aiworkforce.task.repository.TaskRepository;
+import com.aiworkforce.task.service.TaskAssessmentService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
@@ -15,6 +17,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Optional;
+import java.time.LocalDate;
 
 @Service
 @RequiredArgsConstructor
@@ -24,6 +27,7 @@ public class JiraWebhookProcessor implements WebhookProcessorStrategy {
     private final ObjectMapper objectMapper;
     private final TaskRepository taskRepository;
     private final EmployeeRepository employeeRepository;
+    private final TaskAssessmentService taskAssessmentService;
 
     @Override
     @Transactional
@@ -85,6 +89,10 @@ public class JiraWebhookProcessor implements WebhookProcessorStrategy {
             task.setDescription(description);
             task.setExternalUrl(externalUrl);
             task.setAssignee(assignee);
+            task.setPriority(mapPriority(fields.path("priority").path("name").asText()));
+            task.setDueDate(parseDueDate(fields.path("duedate").asText(null)));
+            task.setEstimatedHours(estimateHours(fields));
+            task.setStoryPoints(extractStoryPoints(fields));
             
             // Status mapping
             JsonNode statusNode = fields.path("status");
@@ -101,11 +109,48 @@ public class JiraWebhookProcessor implements WebhookProcessorStrategy {
                 }
             }
 
+            taskAssessmentService.assess(task, "JIRA_WEBHOOK");
             taskRepository.save(task);
 
         } catch (Exception e) {
             log.error("Error processing Jira webhook payload", e);
             throw new RuntimeException("Error processing payload", e);
         }
+    }
+
+    private TaskPriority mapPriority(String priorityName) {
+        if (priorityName == null) return TaskPriority.MEDIUM;
+        String normalized = priorityName.toUpperCase();
+        if (normalized.contains("HIGHEST") || normalized.contains("CRITICAL") || normalized.contains("BLOCKER")) {
+            return TaskPriority.CRITICAL;
+        }
+        if (normalized.contains("HIGH")) return TaskPriority.HIGH;
+        if (normalized.contains("LOW")) return TaskPriority.LOW;
+        return TaskPriority.MEDIUM;
+    }
+
+    private java.time.LocalDateTime parseDueDate(String dueDate) {
+        if (dueDate == null || dueDate.isBlank()) return null;
+        try {
+            return LocalDate.parse(dueDate).atStartOfDay();
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private int estimateHours(JsonNode fields) {
+        int seconds = fields.path("timeoriginalestimate").asInt(0);
+        if (seconds == 0) {
+            seconds = fields.path("timeestimate").asInt(0);
+        }
+        return seconds > 0 ? Math.max(1, (int) Math.ceil(seconds / 3600.0)) : 0;
+    }
+
+    private Integer extractStoryPoints(JsonNode fields) {
+        JsonNode storyPoints = fields.path("customfield_10016");
+        if (storyPoints.isNumber()) {
+            return storyPoints.asInt();
+        }
+        return null;
     }
 }

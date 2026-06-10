@@ -18,4 +18,8 @@ public class TaskRequest {
     private String externalTicketRef;
     private Integer sprintNumber;
     private Integer storyPoints;
+    private Integer difficultyScore;
+    private Integer progressPercent;
+    private String leadEvaluation;
+    private Boolean agentAssess;
 }

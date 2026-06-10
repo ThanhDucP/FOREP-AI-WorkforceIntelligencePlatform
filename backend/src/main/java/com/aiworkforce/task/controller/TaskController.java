@@ -95,6 +95,12 @@ public class TaskController {
         return ResponseEntity.ok(ApiResponse.success(taskService.updateTaskStatus(id, status)));
     }
 
+    @PostMapping("/{id}/assess")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
+    public ResponseEntity<ApiResponse<Task>> assessTask(@PathVariable UUID id) {
+        return ResponseEntity.ok(ApiResponse.success(taskService.assessTask(id)));
+    }
+
     @DeleteMapping("/{id}")
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<Void>> deleteTask(@PathVariable UUID id) {

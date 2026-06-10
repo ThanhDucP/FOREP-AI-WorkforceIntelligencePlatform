@@ -1,12 +1,14 @@
 package com.aiworkforce.integration.service;
 
 import com.aiworkforce.core.enums.IntegrationProvider;
+import com.aiworkforce.core.enums.TaskPriority;
 import com.aiworkforce.core.enums.TaskStatus;
 import com.aiworkforce.identity.entity.Employee;
 import com.aiworkforce.identity.repository.EmployeeRepository;
 import com.aiworkforce.integration.entity.TaskIntegrationConfig;
 import com.aiworkforce.task.entity.Task;
 import com.aiworkforce.task.repository.TaskRepository;
+import com.aiworkforce.task.service.TaskAssessmentService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
@@ -27,6 +29,7 @@ public class GithubWebhookProcessor implements WebhookProcessorStrategy {
     private final ObjectMapper objectMapper;
     private final TaskRepository taskRepository;
     private final EmployeeRepository employeeRepository;
+    private final TaskAssessmentService taskAssessmentService;
 
     @Override
     @Transactional
@@ -87,6 +90,8 @@ public class GithubWebhookProcessor implements WebhookProcessorStrategy {
             task.setDescription(body);
             task.setExternalUrl(htmlUrl);
             task.setAssignee(assignee);
+            task.setPriority(mapPriority(issueNode.path("labels")));
+            task.setEstimatedHours(estimateHours(title, body));
             
             // Map status
             if ("closed".equalsIgnoreCase(state)) {
@@ -97,6 +102,7 @@ public class GithubWebhookProcessor implements WebhookProcessorStrategy {
                 }
             }
 
+            taskAssessmentService.assess(task, "GITHUB_WEBHOOK");
             taskRepository.save(task);
 
         } catch (Exception e) {
@@ -133,5 +139,21 @@ public class GithubWebhookProcessor implements WebhookProcessorStrategy {
             hexString.append(hex);
         }
         return hexString.toString();
+    }
+
+    private TaskPriority mapPriority(JsonNode labels) {
+        if (labels == null || !labels.isArray()) return TaskPriority.MEDIUM;
+        for (JsonNode label : labels) {
+            String name = label.path("name").asText("").toLowerCase();
+            if (name.contains("critical") || name.contains("blocker")) return TaskPriority.CRITICAL;
+            if (name.contains("high")) return TaskPriority.HIGH;
+            if (name.contains("low")) return TaskPriority.LOW;
+        }
+        return TaskPriority.MEDIUM;
+    }
+
+    private int estimateHours(String title, String body) {
+        int length = (title == null ? 0 : title.length()) + (body == null ? 0 : body.length());
+        return Math.max(1, Math.min(40, 2 + (length / 400)));
     }
 }

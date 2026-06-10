@@ -39,12 +39,14 @@ public class TaskService {
     private final SprintRepository sprintRepository;
     private final EmployeeService employeeService;
     private final EventPublisher eventPublisher;
+    private final TaskAssessmentService taskAssessmentService;
 
     @Transactional
     public Task createTask(TaskRequest request) {
         Task task = new Task();
         task.setStatus(TaskStatus.TODO);
         applyTaskRequest(task, request);
+        assessTask(task, request, "AGENT");
 
         Task savedTask = taskRepository.save(task);
 
@@ -111,6 +113,7 @@ public class TaskService {
     public Task updateTask(UUID id, TaskRequest request) {
         Task task = getTask(id);
         applyTaskRequest(task, request);
+        assessTask(task, request, "AGENT");
         Task updatedTask = taskRepository.save(task);
         publishEvent(EventType.TASK_UPDATED, updatedTask, "Task updated: " + updatedTask.getTitle());
         return updatedTask;
@@ -125,6 +128,7 @@ public class TaskService {
         } else {
             task.setCompletedAt(null);
         }
+        taskAssessmentService.assess(task, "AGENT");
         Task updatedTask = taskRepository.save(task);
 
         EventType type = EventType.TASK_UPDATED;
@@ -177,6 +181,9 @@ public class TaskService {
         task.setExternalTicketRef(request.getExternalTicketRef());
         task.setSprintNumber(request.getSprintNumber());
         task.setStoryPoints(request.getStoryPoints());
+        task.setDifficultyScore(request.getDifficultyScore());
+        task.setProgressPercent(request.getProgressPercent());
+        task.setLeadEvaluation(request.getLeadEvaluation());
 
         Employee assignee = null;
         if (request.getAssigneeId() != null) {
@@ -207,6 +214,24 @@ public class TaskService {
             task.setSprint(sprint);
         } else {
             task.setSprint(null);
+        }
+    }
+
+    @Transactional
+    public Task assessTask(UUID id) {
+        Task task = getTask(id);
+        taskAssessmentService.assess(task, "AGENT");
+        Task updatedTask = taskRepository.save(task);
+        publishEvent(EventType.TASK_UPDATED, updatedTask, "Task assessed: " + updatedTask.getTitle());
+        return updatedTask;
+    }
+
+    private void assessTask(Task task, TaskRequest request, String defaultSource) {
+        Boolean agentAssess = request.getAgentAssess();
+        if (agentAssess == null || agentAssess) {
+            taskAssessmentService.assess(task, defaultSource);
+        } else {
+            taskAssessmentService.assess(task, "MANUAL");
         }
     }
 
