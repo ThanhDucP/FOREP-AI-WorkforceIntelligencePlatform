@@ -19,6 +19,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Optional;
 import java.time.LocalDate;
+import java.nio.charset.StandardCharsets;
+import java.util.Base64;
 
 @Service
 @RequiredArgsConstructor
@@ -63,7 +65,7 @@ public class JiraApiClient {
             String baseUrl = (jiraApiUrlOverride != null) ? jiraApiUrlOverride : "https://" + domain;
             WebClient webClient = WebClient.builder()
                     .baseUrl(baseUrl)
-                    .defaultHeader("Authorization", "Bearer " + accessToken)
+                    .defaultHeader("Authorization", buildAuthorizationHeader(accessToken))
                     .defaultHeader("Accept", "application/json")
                     .build();
 
@@ -160,6 +162,15 @@ public class JiraApiClient {
             log.error("Failed to sync issues from Jira for config: {}", config.getId(), e);
             throw new RuntimeException("Jira Sync Failed: " + e.getMessage(), e);
         }
+    }
+
+    private String buildAuthorizationHeader(String accessToken) {
+        if (accessToken.contains(":")) {
+            String encoded = Base64.getEncoder()
+                    .encodeToString(accessToken.getBytes(StandardCharsets.UTF_8));
+            return "Basic " + encoded;
+        }
+        return "Bearer " + accessToken;
     }
 
     private TaskPriority mapPriority(String priorityName) {

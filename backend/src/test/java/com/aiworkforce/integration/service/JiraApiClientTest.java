@@ -23,9 +23,11 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
+import java.util.Base64;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
@@ -41,6 +43,7 @@ public class JiraApiClientTest {
     private ObjectMapper objectMapper;
     private JiraApiClient jiraApiClient;
     private HttpServer server;
+    private String authorizationHeader;
 
     @BeforeEach
     void setUp() {
@@ -83,7 +86,7 @@ public class JiraApiClientTest {
 
         TaskIntegrationConfig config = new TaskIntegrationConfig();
         config.setProjectKey("test.atlassian.net/PROJ");
-        config.setAccessToken("test-token");
+        config.setAccessToken("user@example.com:test-token");
         config.setTeam(new Team());
 
         when(taskRepository.findByExternalTicketRefAndSourceProvider("PROJ-123", IntegrationProvider.JIRA))
@@ -95,6 +98,11 @@ public class JiraApiClientTest {
         verify(taskRepository, times(1)).save(taskCaptor.capture());
 
         Task savedTask = taskCaptor.getValue();
+        assertTrue(authorizationHeader.startsWith("Basic "));
+        assertEquals(
+                "user@example.com:test-token",
+                new String(Base64.getDecoder().decode(authorizationHeader.substring("Basic ".length())), StandardCharsets.UTF_8)
+        );
         assertEquals("PROJ-123", savedTask.getExternalTicketRef());
         assertEquals("Fix JIRA", savedTask.getTitle());
         assertEquals("API issues in Jira", savedTask.getDescription());
@@ -106,6 +114,7 @@ public class JiraApiClientTest {
     private void startJiraServer(String responseBody) throws IOException {
         server = HttpServer.create(new InetSocketAddress(0), 0);
         server.createContext("/rest/api/2/search", exchange -> {
+            authorizationHeader = exchange.getRequestHeaders().getFirst("Authorization");
             byte[] bytes = responseBody.getBytes(StandardCharsets.UTF_8);
             exchange.getResponseHeaders().add("Content-Type", "application/json; charset=utf-8");
             exchange.sendResponseHeaders(200, bytes.length);
