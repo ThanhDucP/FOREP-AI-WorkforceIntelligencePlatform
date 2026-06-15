@@ -70,23 +70,4 @@ public class WorkloadAnalyticsController {
         return ResponseEntity.ok(ApiResponse.success(workloadSnapshotService.getOrganizationWorkloadHistory(organizationId, startDate, endDate)));
     }
 
-    @PostMapping("/workload-history/generate-mock/{employeeId}")
-    @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<ApiResponse<Void>> generateMockHistory(
-            @PathVariable UUID employeeId,
-            @RequestParam(defaultValue = "30") int days) {
-        
-        Employee emp = employeeService.getCurrentEmployee();
-        if (!emp.getId().equals(employeeId)) {
-            // Fetch by id
-            Employee target = new Employee();
-            target.setId(employeeId);
-            // Quick mock generate
-            workloadSnapshotService.generateHistoricalSnapshots(target, days);
-        } else {
-            workloadSnapshotService.generateHistoricalSnapshots(emp, days);
-        }
-
-        return ResponseEntity.ok(ApiResponse.success(null));
-    }
 }

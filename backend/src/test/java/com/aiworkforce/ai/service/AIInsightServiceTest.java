@@ -1,6 +1,6 @@
 package com.aiworkforce.ai.service;
 
-import com.aiworkforce.ai.client.OllamaClient;
+import com.aiworkforce.ai.client.GeminiClient;
 import com.aiworkforce.ai.entity.AIInsight;
 import com.aiworkforce.ai.prompt.PromptBuilder;
 import com.aiworkforce.ai.repository.AIInsightRepository;
@@ -8,6 +8,7 @@ import com.aiworkforce.analytics.dto.DashboardResponse;
 import com.aiworkforce.analytics.service.DashboardAnalyticsService;
 import com.aiworkforce.core.enums.InsightSeverity;
 import com.aiworkforce.core.enums.InsightType;
+import com.aiworkforce.core.exception.AiServiceException;
 import com.aiworkforce.identity.entity.Employee;
 import com.aiworkforce.identity.repository.EmployeeRepository;
 import com.aiworkforce.identity.repository.TeamRepository;
@@ -28,6 +29,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -35,7 +37,7 @@ import static org.mockito.Mockito.when;
 public class AIInsightServiceTest {
 
     @Mock
-    private OllamaClient ollamaClient;
+    private GeminiClient geminiClient;
 
     @Mock
     private PromptBuilder promptBuilder;
@@ -88,7 +90,7 @@ public class AIInsightServiceTest {
                   "recommendations": ["Duy trì nhịp làm việc", "Ghi nhận đóng góp"]
                 }
                 """;
-        when(ollamaClient.generateInsight("mock-prompt")).thenReturn(mockJsonResponse);
+        when(geminiClient.generateInsight("mock-prompt")).thenReturn(mockJsonResponse);
         when(insightRepository.save(any(AIInsight.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         AIInsight result = aiInsightService.generateInsightForEmployee(employeeId);
@@ -115,7 +117,7 @@ public class AIInsightServiceTest {
                 }
                 ```
                 """;
-        when(ollamaClient.generateInsight("mock-prompt")).thenReturn(fencedResponse);
+        when(geminiClient.generateInsight("mock-prompt")).thenReturn(fencedResponse);
         when(insightRepository.save(any(AIInsight.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         AIInsight result = aiInsightService.generateInsightForEmployee(employeeId);
@@ -125,18 +127,16 @@ public class AIInsightServiceTest {
     }
 
     @Test
-    public void testGenerateInsightForEmployee_Fallback_InvalidJson() {
+    public void testGenerateInsightForEmployee_Throws_InvalidJson() {
         mockBaseGeneration(dashboardResponse);
-        when(ollamaClient.generateInsight("mock-prompt")).thenReturn("This is not a JSON response");
-        when(insightRepository.save(any(AIInsight.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(geminiClient.generateInsight("mock-prompt")).thenReturn("This is not a JSON response");
 
-        AIInsight result = aiInsightService.generateInsightForEmployee(employeeId);
+        AiServiceException exception = org.junit.jupiter.api.Assertions.assertThrows(AiServiceException.class, () ->
+                aiInsightService.generateInsightForEmployee(employeeId)
+        );
 
-        assertNotNull(result);
-        assertTrue(result.getSummary().contains("Nhân viên đang duy trì"));
-        assertTrue(result.getFullAnalysis().contains("recommendations"));
-        assertTrue(!result.getFullAnalysis().contains("This is not a JSON response"));
-        verify(insightRepository, times(1)).save(any(AIInsight.class));
+        assertTrue(exception.getMessage().contains("Gemini response is not valid JSON"));
+        verify(insightRepository, never()).save(any(AIInsight.class));
     }
 
     @Test
@@ -148,7 +148,13 @@ public class AIInsightServiceTest {
                 .burnoutRiskLevel("UNKNOWN")
                 .build();
         mockBaseGeneration(unknownRisk);
-        when(ollamaClient.generateInsight("mock-prompt")).thenReturn("{}");
+        when(geminiClient.generateInsight("mock-prompt")).thenReturn("""
+                {
+                  "status_evaluation": "Nhân viên ổn định.",
+                  "primary_reason": "Không có tín hiệu quá tải rõ ràng.",
+                  "recommendations": ["Tiếp tục theo dõi"]
+                }
+                """);
         when(insightRepository.save(any(AIInsight.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         AIInsight result = aiInsightService.generateInsightForEmployee(employeeId);

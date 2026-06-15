@@ -1,42 +1,43 @@
 package com.aiworkforce.ai.config;
 
+import com.aiworkforce.core.exception.AiServiceException;
+import dev.langchain4j.model.chat.ChatModel;
+import dev.langchain4j.model.googleai.GoogleAiGeminiChatModel;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.web.reactive.function.client.WebClient;
+
+import java.time.Duration;
 
 /**
- * Spring configuration for AI provider clients.
- * Registers two named {@link WebClient} beans:
- * <ul>
- *   <li>{@code ollamaWebClient} – points at the Ollama base URL (local/dev)</li>
- *   <li>{@code geminiWebClient} – points at the Google Generative Language API (prod)</li>
- * </ul>
- * The bean names must match the parameter names in {@link com.aiworkforce.ai.client.OllamaClient}
- * constructor so that Spring resolves them by name when there are multiple WebClient beans.
+ * Spring configuration for the LangChain4j Gemini chat model.
  */
 @Configuration
 @EnableConfigurationProperties(AiProperties.class)
 public class AiConfig {
 
     /**
-     * WebClient pre-configured with the Ollama base URL from application config.
+     * ChatModel pre-configured for Google Gemini through LangChain4j.
+     * If the key is absent, keep application startup healthy and fail only when AI is called.
      */
     @Bean
-    public WebClient ollamaWebClient(AiProperties props) {
-        return WebClient.builder()
-                .baseUrl(props.getOllama().getBaseUrl())
-                .build();
-    }
+    public ChatModel geminiChatModel(AiProperties props) {
+        AiProperties.Gemini gemini = props.getGemini();
+        if (gemini.getApiKey() == null || gemini.getApiKey().isBlank()) {
+            return new ChatModel() {
+                @Override
+                public String chat(String prompt) {
+                    throw new AiServiceException(
+                            "Gemini API key is not configured. Set GEMINI_API_KEY before using AI insight generation."
+                    );
+                }
+            };
+        }
 
-    /**
-     * WebClient pre-configured with the Gemini API base URL.
-     * The API key is appended per-request as a query parameter.
-     */
-    @Bean
-    public WebClient geminiWebClient() {
-        return WebClient.builder()
-                .baseUrl("https://generativelanguage.googleapis.com")
+        return GoogleAiGeminiChatModel.builder()
+                .apiKey(gemini.getApiKey())
+                .modelName(gemini.getModel())
+                .timeout(Duration.ofSeconds(gemini.getTimeoutSeconds()))
                 .build();
     }
 }

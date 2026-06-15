@@ -36,7 +36,5 @@ public class EventProcessor {
         event.setImpactScore(score);
         workloadEventRepository.save(event);
         log.info("Saved workload event with score {}", score);
-        
-        // TODO: Trigger live analytics cache update if necessary
     }
 }

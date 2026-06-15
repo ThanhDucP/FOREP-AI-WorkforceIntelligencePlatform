@@ -40,4 +40,10 @@ out/
 postman/
 node_modules/
 build_collection.js
+forep_api_collection.json
 forep_api_collection_built.json
+BACKEND_CODE_GUIDE.md
+PROJECT_OVERVIEW.md
+SETUP_GUIDE.md
+.github/modernize/
+backend/.github/

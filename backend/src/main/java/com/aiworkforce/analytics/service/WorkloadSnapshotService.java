@@ -20,6 +20,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -109,14 +110,7 @@ public class WorkloadSnapshotService {
         long openTasks = employeeTasks.stream().filter(t -> !"DONE".equalsIgnoreCase(t.getStatus().name())).count();
         long overdueTasks = employeeTasks.stream().filter(t -> "OVERDUE".equalsIgnoreCase(t.getStatus().name())).count();
 
-        // Calculate workload score (mocking based on open tasks and story points)
-        // Normal range is 0 to 100. Over 80 is high/burnout risk.
-        double workloadScore = Math.min(100.0, Math.max(0.0, (openTasks * 15.0) + (overdueTasks * 20.0)));
-        if (workloadScore == 0 && !employeeTasks.isEmpty()) {
-            workloadScore = 30.0; // baseline if tasks exist but none overdue/high count
-        } else if (employeeTasks.isEmpty()) {
-            workloadScore = 15.0; // baseline default
-        }
+        double workloadScore = calculateWorkloadScore(employeeTasks);
 
         // Determine Burnout Risk
         BurnoutRisk risk = BurnoutRisk.NONE;
@@ -128,8 +122,10 @@ public class WorkloadSnapshotService {
             risk = BurnoutRisk.WATCH;
         }
 
-        // Focus score composite: cycle time, overdue ratio (0.0-1.0), etc.
-        double focusScore = Math.max(0.0, 100.0 - (overdueTasks * 15.0) - (workloadScore * 0.3));
+        double overdueRatio = openTasks > 0 ? (double) overdueTasks / openTasks : 0.0;
+        double cycleTime = calculateAverageCycleTime(employeeTasks, emp);
+        double outOfHours = emp.getOutOfHoursPct() != null ? emp.getOutOfHoursPct() : 0.0;
+        double focusScore = Math.max(0.0, 100.0 - (overdueTasks * 15.0) - (workloadScore * 0.3) - (outOfHours * 0.2));
 
         // Save daily snapshot
         EmployeeWorkloadSnapshot snapshot = new EmployeeWorkloadSnapshot();
@@ -140,10 +136,6 @@ public class WorkloadSnapshotService {
         snapshot.setTasksOpen((int) openTasks);
         snapshot.setTasksOverdue((int) overdueTasks);
         
-        // Populate realistic out of hours and cycle time based on employee initials / mock logic
-        double outOfHours = emp.getOutOfHoursPct() != null ? emp.getOutOfHoursPct() : Math.min(45.0, (openTasks * 4.2));
-        double cycleTime = emp.getAvgCycleTimeDays() != null ? emp.getAvgCycleTimeDays() : 2.5 + (overdueTasks * 1.5);
-        
         snapshot.setOutOfHoursPct(outOfHours);
         snapshot.setCycleTimeAvg(cycleTime);
         
@@ -153,13 +145,12 @@ public class WorkloadSnapshotService {
         emp.setWorkloadScore(workloadScore);
         emp.setBurnoutRisk(risk);
         emp.setFocusScore(focusScore);
-        emp.setOverdueRatio(openTasks > 0 ? (double) overdueTasks / openTasks : 0.0);
+        emp.setOverdueRatio(overdueRatio);
         emp.setOutOfHoursPct(outOfHours);
         emp.setAvgCycleTimeDays(cycleTime);
-        
-        if (emp.getTasksShippedThisMonth() == null) emp.setTasksShippedThisMonth(5);
-        if (emp.getStreakDays() == null) emp.setStreakDays(4);
-        if (emp.getContributionScore() == null) emp.setContributionScore(75.0);
+        emp.setTasksShippedThisMonth(countCompletedThisMonth(employeeTasks, date));
+        emp.setStreakDays(emp.getStreakDays() != null ? emp.getStreakDays() : 0);
+        emp.setContributionScore(calculateContributionScore(employeeTasks));
         
         employeeRepository.save(emp);
 
@@ -178,36 +169,52 @@ public class WorkloadSnapshotService {
         return snapshot;
     }
 
-    @Transactional
-    public void generateHistoricalSnapshots(Employee emp, int days) {
-        LocalDate start = LocalDate.now().minusDays(days);
-        for (int i = 0; i <= days; i++) {
-            LocalDate date = start.plusDays(i);
-            
-            // Randomize workload score a bit for beautiful charts
-            double baseScore = 30.0 + (i % 7) * 8.0;
-            if (emp.getFirstName().equalsIgnoreCase("David") || emp.getFirstName().equalsIgnoreCase("Elena")) {
-                baseScore += 25.0; // Higher workload for David/Elena
-            }
-            double finalScore = Math.min(98.0, baseScore);
-            
-            BurnoutRisk risk = BurnoutRisk.NONE;
-            if (finalScore >= 80.0) risk = BurnoutRisk.HIGH;
-            else if (finalScore >= 55.0) risk = BurnoutRisk.MEDIUM;
-            else if (finalScore >= 35.0) risk = BurnoutRisk.WATCH;
+    private double calculateWorkloadScore(List<Task> tasks) {
+        return Math.min(100.0, tasks.stream()
+                .filter(task -> task.getStatus() != com.aiworkforce.core.enums.TaskStatus.DONE)
+                .mapToDouble(task -> {
+                    double storyPoints = task.getStoryPoints() != null ? task.getStoryPoints() * 6.0 : 0.0;
+                    double estimatedHours = task.getEstimatedHours() * 1.5;
+                    double priorityWeight = switch (task.getPriority()) {
+                        case CRITICAL -> 18.0;
+                        case HIGH -> 12.0;
+                        case MEDIUM -> 7.0;
+                        case LOW -> 3.0;
+                    };
+                    double overdueWeight = task.getStatus() == com.aiworkforce.core.enums.TaskStatus.OVERDUE ? 20.0 : 0.0;
+                    return storyPoints + estimatedHours + priorityWeight + overdueWeight;
+                })
+                .sum());
+    }
 
-            EmployeeWorkloadSnapshot snapshot = new EmployeeWorkloadSnapshot();
-            snapshot.setEmployee(emp);
-            snapshot.setSnapshotDate(date);
-            snapshot.setWorkloadScore(finalScore);
-            snapshot.setBurnoutRisk(risk);
-            snapshot.setTasksOpen(3 + (i % 4));
-            snapshot.setTasksOverdue(i % 5 == 0 ? 1 : 0);
-            snapshot.setOutOfHoursPct(10.0 + (i % 3) * 8.0);
-            snapshot.setCycleTimeAvg(2.0 + (i % 4) * 0.8);
-            
-            snapshotRepository.save(snapshot);
-        }
+    private double calculateAverageCycleTime(List<Task> tasks, Employee employee) {
+        return tasks.stream()
+                .filter(task -> task.getCycleTimeDays() != null)
+                .mapToDouble(Task::getCycleTimeDays)
+                .average()
+                .orElse(employee.getAvgCycleTimeDays() != null ? employee.getAvgCycleTimeDays() : 0.0);
+    }
+
+    private int countCompletedThisMonth(List<Task> tasks, LocalDate snapshotDate) {
+        LocalDate monthStart = snapshotDate.withDayOfMonth(1);
+        LocalDateTime monthStartDateTime = monthStart.atStartOfDay();
+        return (int) tasks.stream()
+                .filter(task -> task.getStatus() == com.aiworkforce.core.enums.TaskStatus.DONE)
+                .filter(task -> task.getCompletedAt() == null || !task.getCompletedAt().isBefore(monthStartDateTime))
+                .count();
+    }
+
+    private double calculateContributionScore(List<Task> tasks) {
+        double completedPoints = tasks.stream()
+                .filter(task -> task.getStatus() == com.aiworkforce.core.enums.TaskStatus.DONE)
+                .mapToDouble(task -> task.getStoryPoints() != null ? task.getStoryPoints() : 1.0)
+                .sum();
+        double completedTaskScores = tasks.stream()
+                .filter(task -> task.getStatus() == com.aiworkforce.core.enums.TaskStatus.DONE)
+                .filter(task -> task.getTaskScore() != null)
+                .mapToDouble(Task::getTaskScore)
+                .sum();
+        return Math.min(100.0, (completedPoints * 8.0) + completedTaskScores);
     }
 
     private WorkloadHistoryResponse mapToResponse(EmployeeWorkloadSnapshot snapshot) {

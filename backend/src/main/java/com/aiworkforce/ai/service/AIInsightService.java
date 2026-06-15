@@ -1,6 +1,6 @@
 package com.aiworkforce.ai.service;
 
-import com.aiworkforce.ai.client.OllamaClient;
+import com.aiworkforce.ai.client.GeminiClient;
 import com.aiworkforce.ai.entity.AIInsight;
 import com.aiworkforce.ai.prompt.PromptBuilder;
 import com.aiworkforce.ai.repository.AIInsightRepository;
@@ -15,10 +15,8 @@ import com.aiworkforce.identity.entity.Team;
 import com.aiworkforce.identity.repository.EmployeeRepository;
 import com.aiworkforce.identity.repository.TeamRepository;
 import com.aiworkforce.identity.service.EmployeeService;
-import com.fasterxml.jackson.databind.JsonMappingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -34,15 +32,14 @@ import java.util.UUID;
  * Luồng chính:
  * 1. Lấy dữ liệu analytics của nhân viên
  * 2. Xây dựng prompt từ dữ liệu
- * 3. Gọi AI (Gemini) qua OllamaClient để sinh insight
+ * 3. Gọi Gemini để sinh insight
  * 4. Parse + normalize JSON response
  * 5. Lưu insight vào database
  * <p>
  * <b>Xử lý lỗi:</b>
  * - Nếu AI không kết nối được → throw {@link AiServiceException} (HTTP 503)
  * - Nếu prompt lỗi → throw {@link IllegalArgumentException} (HTTP 400)
- * - Nếu AI trả về JSON không hợp lệ → dùng fallback dựa trên dữ liệu analytics thực tế
- *   (đây KHÔNG phải mock - là phân tích rule-based dựa trên data thật)
+ * - Nếu AI trả về JSON không hợp lệ → throw {@link AiServiceException}
  */
 @Service
 @RequiredArgsConstructor
@@ -51,7 +48,7 @@ public class AIInsightService {
 
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
-    private final OllamaClient ollamaClient;
+    private final GeminiClient geminiClient;
     private final PromptBuilder promptBuilder;
     private final DashboardAnalyticsService analyticsService;
     private final EmployeeRepository employeeRepository;
@@ -62,7 +59,7 @@ public class AIInsightService {
     /**
      * Sinh AI insight cho nhân viên dựa trên dữ liệu analytics.
      * <p>
-     * Gọi Gemini AI thật để phân tích - KHÔNG dùng mock/fake data.
+     * Gọi Gemini AI thật để phân tích - không dùng dữ liệu giả hoặc fallback che lỗi.
      * Nếu AI không khả dụng, exception sẽ được propagate lên controller.
      *
      * @param employeeId UUID của nhân viên cần phân tích
@@ -84,7 +81,7 @@ public class AIInsightService {
         // Gọi AI - sẽ throw AiServiceException nếu lỗi kết nối/prompt
         String aiResponse;
         try {
-            aiResponse = ollamaClient.generateInsight(prompt);
+            aiResponse = geminiClient.generateInsight(prompt);
         } catch (AiServiceException e) {
             log.error("Lỗi khi gọi AI service cho nhân viên {}: {}", employeeId, e.getMessage());
             throw e; // Propagate lên controller để trả HTTP 503
@@ -94,7 +91,7 @@ public class AIInsightService {
         }
 
         // Parse và normalize response JSON từ AI
-        ObjectNode normalizedInsight = normalizeInsightJson(aiResponse, analytics);
+        ObjectNode normalizedInsight = normalizeInsightJson(aiResponse);
         String summaryText = normalizedInsight.get("status_evaluation").asText();
         String fullAnalysis = normalizedInsight.toPrettyString();
 
@@ -127,27 +124,27 @@ public class AIInsightService {
     /**
      * Normalize JSON response từ AI.
      * <p>
-     * Nếu AI trả về JSON hợp lệ nhưng thiếu một số field → bổ sung từ analytics data thật.
-     * Nếu AI trả về text không phải JSON → tạo insight dựa trên rule-based analysis
-     * (KHÔNG phải mock - sử dụng dữ liệu analytics thực tế để đánh giá).
+     * Nếu AI trả về JSON hợp lệ nhưng thiếu field bắt buộc → throw {@link AiServiceException}.
+     * Nếu AI trả về text không phải JSON → throw {@link AiServiceException}; service không tự sinh insight thay Gemini.
      */
-    private ObjectNode normalizeInsightJson(String response, DashboardResponse analytics) {
+    private ObjectNode normalizeInsightJson(String response) {
         String jsonCandidate = extractJsonObject(cleanJsonResponse(response));
 
         try {
             JsonNode rootNode = OBJECT_MAPPER.readTree(jsonCandidate);
             if (!rootNode.isObject()) {
-                throw JsonMappingException.from(OBJECT_MAPPER.createParser(jsonCandidate), "AI response is not a JSON object");
+                throw new AiServiceException("Gemini response is not a JSON object.");
             }
 
             ObjectNode normalized = (ObjectNode) rootNode;
-            ensureTextField(normalized, "status_evaluation", fallbackStatusEvaluation(analytics));
-            ensureTextField(normalized, "primary_reason", fallbackPrimaryReason(analytics));
-            ensureRecommendations(normalized, analytics);
+            validateRequiredInsightSchema(normalized);
             return normalized;
         } catch (Exception e) {
-            log.warn("AI response không phải JSON hợp lệ: {}. Sử dụng phân tích rule-based từ dữ liệu thật.", e.getMessage());
-            return buildRuleBasedInsight(analytics);
+            if (e instanceof AiServiceException aiServiceException) {
+                throw aiServiceException;
+            }
+            log.error("Gemini response is not valid JSON: {}", e.getMessage());
+            throw new AiServiceException("Gemini response is not valid JSON. Raw response cannot be used as an AI insight.", e);
         }
     }
 
@@ -165,85 +162,23 @@ public class AIInsightService {
         return response.trim();
     }
 
-    private void ensureTextField(ObjectNode node, String fieldName, String fallbackValue) {
-        JsonNode value = node.get(fieldName);
-        if (value == null || !value.isTextual() || value.asText().isBlank()) {
-            node.put(fieldName, fallbackValue);
-        }
-    }
+    private void validateRequiredInsightSchema(ObjectNode node) {
+        validateRequiredTextField(node, "status_evaluation");
+        validateRequiredTextField(node, "primary_reason");
 
-    private void ensureRecommendations(ObjectNode node, DashboardResponse analytics) {
         JsonNode recommendations = node.get("recommendations");
         if (recommendations != null && recommendations.isArray() && recommendations.size() > 0) {
             return;
         }
 
-        ArrayNode fallback = OBJECT_MAPPER.createArrayNode();
-        ruleBasedRecommendations(analytics).forEach(fallback::add);
-        node.set("recommendations", fallback);
+        throw new AiServiceException("Gemini response is missing required array field: recommendations.");
     }
 
-    /**
-     * Tạo insight dựa trên phân tích rule-based từ dữ liệu analytics thật.
-     * <p>
-     * Đây KHÔNG phải mock data. Insight được sinh ra dựa trên:
-     * - Workload score thực tế
-     * - Số tác vụ trễ hạn thực tế
-     * - Số tác vụ hoàn thành thực tế
-     * - Mức burnout risk level từ hệ thống phân tích
-     * <p>
-     * Được sử dụng khi AI trả về text không parse được thành JSON,
-     * nhưng kết nối AI vẫn thành công (không phải lỗi kết nối).
-     */
-    private ObjectNode buildRuleBasedInsight(DashboardResponse analytics) {
-        ObjectNode insight = OBJECT_MAPPER.createObjectNode();
-        insight.put("status_evaluation", fallbackStatusEvaluation(analytics));
-        insight.put("primary_reason", fallbackPrimaryReason(analytics));
-        insight.put("_source", "rule-based-analysis"); // Đánh dấu nguồn là rule-based, không phải AI
-
-        ArrayNode recommendations = OBJECT_MAPPER.createArrayNode();
-        ruleBasedRecommendations(analytics).forEach(recommendations::add);
-        insight.set("recommendations", recommendations);
-        return insight;
-    }
-
-    private String fallbackStatusEvaluation(DashboardResponse analytics) {
-        InsightSeverity severity = resolveSeverity(analytics.getBurnoutRiskLevel());
-        return switch (severity) {
-            case CRITICAL, HIGH -> "Nhân viên đang có dấu hiệu quá tải đáng kể và cần được can thiệp sớm để giảm rủi ro kiệt sức.";
-            case MEDIUM -> "Nhân viên đang ở vùng cần theo dõi, tải công việc chưa vượt ngưỡng nghiêm trọng nhưng đã có tín hiệu mất cân bằng.";
-            case LOW -> "Nhân viên đang duy trì nhịp làm việc ổn định, chưa có dấu hiệu rủi ro kiệt sức đáng kể.";
-        };
-    }
-
-    private String fallbackPrimaryReason(DashboardResponse analytics) {
-        return String.format(
-                "Dữ liệu hiện tại ghi nhận workload score %d, %d tác vụ trễ hạn và %d tác vụ hoàn thành gần đây.",
-                analytics.getCurrentWorkloadScore(),
-                analytics.getTotalOverdueTasks(),
-                analytics.getTotalTasksCompleted()
-        );
-    }
-
-    private List<String> ruleBasedRecommendations(DashboardResponse analytics) {
-        InsightSeverity severity = resolveSeverity(analytics.getBurnoutRiskLevel());
-        return switch (severity) {
-            case CRITICAL, HIGH -> List.of(
-                    "Tổ chức cuộc trao đổi 1-1 trong tuần này để xác định điểm nghẽn và mức hỗ trợ cần thiết.",
-                    "Tái phân bổ các tác vụ ưu tiên cao sang thành viên còn năng lực tiếp nhận.",
-                    "Tạm dừng giao thêm việc khẩn cấp cho đến khi các tác vụ tồn đọng được xử lý."
-            );
-            case MEDIUM -> List.of(
-                    "Rà soát lại thứ tự ưu tiên backlog và giảm các tác vụ chuyển ngữ cảnh nhiều.",
-                    "Theo dõi tiến độ trong vài ngày tới để phát hiện sớm xu hướng quá tải.",
-                    "Trao đổi với nhóm trưởng trước khi giao thêm nhiệm vụ có độ ưu tiên cao."
-            );
-            case LOW -> List.of(
-                    "Duy trì nhịp làm việc hiện tại và tiếp tục theo dõi workload định kỳ.",
-                    "Ghi nhận đóng góp tích cực để củng cố động lực làm việc.",
-                    "Có thể giao thêm nhiệm vụ vừa phải nếu vẫn giữ được tiến độ ổn định."
-            );
-        };
+    private void validateRequiredTextField(ObjectNode node, String fieldName) {
+        JsonNode value = node.get(fieldName);
+        if (value == null || !value.isTextual() || value.asText().isBlank()) {
+            throw new AiServiceException("Gemini response is missing required text field: " + fieldName + ".");
+        }
     }
 
     private InsightSeverity resolveSeverity(String riskLevel) {

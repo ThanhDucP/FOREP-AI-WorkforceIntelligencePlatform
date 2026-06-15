@@ -2,7 +2,6 @@ package com.aiworkforce.security.jwt;
 
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
-import io.jsonwebtoken.SignatureAlgorithm;
 import io.jsonwebtoken.io.Decoders;
 import io.jsonwebtoken.security.Keys;
 import org.springframework.beans.factory.annotation.Value;
@@ -21,9 +20,11 @@ import java.util.stream.Collectors;
 @Service
 public class JwtService {
 
-    // Usually loaded from properties, hardcoded for scaffold
-    private final String secretKey = "404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970";
-    private final long jwtExpiration = 86400000; // 1 day
+    @Value("${app.security.jwt.secret-key}")
+    private String secretKey;
+
+    @Value("${app.security.jwt.access-token-expiration}")
+    private long jwtExpiration;
 
     public String extractUsername(String token) {
         return extractClaim(token, Claims::getSubject);

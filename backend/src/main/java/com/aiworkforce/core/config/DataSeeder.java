@@ -199,13 +199,7 @@ public class DataSeeder implements CommandLineRunner {
         // Frank Castle
         createTask("Vẽ Wireframe module Quản lý Sprint của Admin", "Thiết kế các mockup giao diện admin, quản lý tài khoản và thiết lập hệ thống.", TaskStatus.IN_PROGRESS, TaskPriority.HIGH, today.plusDays(4), 16, frankCastle, graceHopper, sprint24, productTeam, 5);
 
-        // 7. Generate Historical snapshots for the last 30 days
-        log.info("Generating 30-day workload history metrics...");
-        for (Employee emp : seededEmployees) {
-            workloadSnapshotService.generateHistoricalSnapshots(emp, 30);
-        }
-
-        // Capture current snapshot to update the cached employee properties correctly
+        // 7. Capture current workload snapshots from seeded task data
         for (Employee emp : seededEmployees) {
             workloadSnapshotService.captureSnapshotForEmployee(emp, today);
         }

@@ -18,20 +18,15 @@ server:
 app:
   security:
     jwt:
-      secret-key: "404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970"
-      access-token-expiration: 86400000 # 1 day
-      refresh-token-expiration: 604800000 # 7 days
+      secret-key: ${JWT_SECRET_KEY:404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970}
+      access-token-expiration: ${JWT_ACCESS_TOKEN_EXPIRATION:86400000} # 1 day
+      refresh-token-expiration: ${JWT_REFRESH_TOKEN_EXPIRATION:604800000} # 7 days
     oauth2:
       enabled: false
       success-redirect-uri: ${OAUTH2_SUCCESS_REDIRECT_URI:http://localhost:3000/auth/oauth2/callback}
       failure-redirect-uri: ${OAUTH2_FAILURE_REDIRECT_URI:http://localhost:3000/login?oauth2=failed}
 
 ai:
-  provider: ${AI_PROVIDER:ollama}
-  ollama:
-    base-url: ${OLLAMA_BASE_URL:http://localhost:11434}
-    model: ${OLLAMA_MODEL:gemma:2b}
-    timeout-seconds: ${OLLAMA_TIMEOUT_SECONDS:60}
   gemini:
     api-key: ${GEMINI_API_KEY:}
     model: ${GEMINI_MODEL:gemini-1.5-flash}
