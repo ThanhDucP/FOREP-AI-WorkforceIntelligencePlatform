@@ -1,7 +1,9 @@
 package com.aiworkforce.task.service;
 
 import com.aiworkforce.core.enums.EventType;
+import com.aiworkforce.core.enums.RoleType;
 import com.aiworkforce.core.enums.TaskStatus;
+import com.aiworkforce.core.exception.BusinessException;
 import com.aiworkforce.core.exception.ResourceNotFoundException;
 import com.aiworkforce.identity.entity.Employee;
 import com.aiworkforce.identity.entity.Sprint;
@@ -10,6 +12,7 @@ import com.aiworkforce.identity.repository.EmployeeRepository;
 import com.aiworkforce.identity.repository.SprintRepository;
 import com.aiworkforce.identity.repository.TeamRepository;
 import com.aiworkforce.identity.service.EmployeeService;
+import com.aiworkforce.identity.service.TeamMembershipService;
 import com.aiworkforce.event.entity.WorkloadEvent;
 import com.aiworkforce.event.publisher.EventPublisher;
 import com.aiworkforce.task.dto.TaskRequest;
@@ -40,6 +43,7 @@ public class TaskService {
     private final EmployeeService employeeService;
     private final EventPublisher eventPublisher;
     private final TaskAssessmentService taskAssessmentService;
+    private final TeamMembershipService membershipService;
 
     @Transactional
     public Task createTask(TaskRequest request) {
@@ -55,12 +59,26 @@ public class TaskService {
     }
 
     public Task getTask(UUID id) {
-        return taskRepository.findById(id)
+        Task task = taskRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Task not found"));
+        ensureTaskAccess(task);
+        return task;
     }
 
     public List<Task> getAllTasks() {
-        return taskRepository.findAll();
+        Employee current = employeeService.getCurrentEmployee();
+        if (hasAdminRole(current)) {
+            return taskRepository.findAll();
+        }
+        List<UUID> managedTeamIds = teamRepository.findByManagerId(current.getId()).stream()
+                .map(Team::getId)
+                .toList();
+        if (!managedTeamIds.isEmpty()) {
+            return taskRepository.findByTeamIdIn(managedTeamIds);
+        }
+        return membershipService.getActiveMembership(current.getId())
+                .map(membership -> taskRepository.findByTeamId(membership.getTeam().getId()))
+                .orElse(Collections.emptyList());
     }
 
     public List<Task> getMyTasks() {
@@ -80,10 +98,15 @@ public class TaskService {
 
     public List<Task> getTasksByTeam(UUID teamId) {
         ensureTeamExists(teamId);
+        ensureTeamAccess(teamId);
         return taskRepository.findByTeamId(teamId);
     }
 
     public List<Task> getTasksByOrganization(UUID organizationId) {
+        Employee current = employeeService.getCurrentEmployee();
+        if (!hasAdminRole(current)) {
+            throw new BusinessException("Only admins can view all organization tasks");
+        }
         return taskRepository.findByTeamOrganizationId(organizationId);
     }
 
@@ -102,11 +125,15 @@ public class TaskService {
 
     public List<Task> getTasksBySprint(UUID sprintId) {
         ensureSprintExists(sprintId);
-        return taskRepository.findBySprintId(sprintId);
+        return taskRepository.findBySprintId(sprintId).stream()
+                .filter(this::canAccessTask)
+                .toList();
     }
 
     public List<Task> getTasksByStatus(TaskStatus status) {
-        return taskRepository.findByStatus(status);
+        return taskRepository.findByStatus(status).stream()
+                .filter(this::canAccessTask)
+                .toList();
     }
 
     @Transactional
@@ -245,6 +272,37 @@ public class TaskService {
         if (!teamRepository.existsById(teamId)) {
             throw new ResourceNotFoundException("Team not found with id: " + teamId);
         }
+    }
+
+    private void ensureTaskAccess(Task task) {
+        if (!canAccessTask(task)) {
+            throw new BusinessException("Current user does not have access to this task");
+        }
+    }
+
+    private void ensureTeamAccess(UUID teamId) {
+        Employee current = employeeService.getCurrentEmployee();
+        if (hasAdminRole(current)
+                || teamRepository.findByManagerId(current.getId()).stream().anyMatch(team -> team.getId().equals(teamId))
+                || membershipService.hasActiveTeamAccess(current.getId(), teamId)) {
+            return;
+        }
+        throw new BusinessException("Current user does not have access to this team");
+    }
+
+    private boolean canAccessTask(Task task) {
+        if (task.getTeam() == null) return false;
+        Employee current = employeeService.getCurrentEmployee();
+        UUID teamId = task.getTeam().getId();
+        return hasAdminRole(current)
+                || teamRepository.findByManagerId(current.getId()).stream().anyMatch(team -> team.getId().equals(teamId))
+                || membershipService.hasActiveTeamAccess(current.getId(), teamId);
+    }
+
+    private boolean hasAdminRole(Employee employee) {
+        return employee.getAccount() != null
+                && employee.getAccount().getRole() != null
+                && employee.getAccount().getRole().getName() == RoleType.ADMIN;
     }
 
     private void ensureSprintExists(UUID sprintId) {

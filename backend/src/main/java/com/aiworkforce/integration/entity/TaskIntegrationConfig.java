@@ -2,6 +2,7 @@ package com.aiworkforce.integration.entity;
 
 import com.aiworkforce.core.base.AuditableEntity;
 import com.aiworkforce.core.enums.IntegrationProvider;
+import com.aiworkforce.identity.entity.Project;
 import com.aiworkforce.identity.entity.Team;
 import jakarta.persistence.*;
 import lombok.Getter;
@@ -16,6 +17,10 @@ public class TaskIntegrationConfig extends AuditableEntity {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "team_id", nullable = false)
     private Team team;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "project_id")
+    private Project project;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)

@@ -26,6 +26,7 @@ public class TeamService {
     private final EmployeeRepository employeeRepository;
     private final OrganizationRepository organizationRepository;
     private final EmployeeService employeeService;
+    private final TeamMembershipService membershipService;
 
     public List<TeamResponse> getAllTeams() {
         return teamRepository.findAll().stream()
@@ -132,18 +133,13 @@ public class TeamService {
 
     @Transactional
     public void assignEmployeeToTeam(UUID employeeId, UUID teamId) {
-        Employee employee = employeeRepository.findById(employeeId)
-                .orElseThrow(() -> new ResourceNotFoundException("Employee not found"));
-        
-        if (teamId != null) {
-            Team team = teamRepository.findById(teamId)
-                    .orElseThrow(() -> new ResourceNotFoundException("Team not found"));
-            employee.setTeam(team);
-        } else {
-            employee.setTeam(null);
+        if (teamId == null) {
+            Employee currentLead = employeeService.getCurrentEmployee();
+            membershipService.endActiveMembership(employeeId, currentLead.getId());
+            return;
         }
-        
-        employeeRepository.save(employee);
+
+        membershipService.requestJoinTeam(employeeId, teamId);
     }
 
     @Transactional

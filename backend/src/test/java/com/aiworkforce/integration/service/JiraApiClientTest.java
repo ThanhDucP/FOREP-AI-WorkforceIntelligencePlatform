@@ -4,6 +4,7 @@ import com.aiworkforce.core.enums.IntegrationProvider;
 import com.aiworkforce.core.enums.TaskStatus;
 import com.aiworkforce.identity.entity.Team;
 import com.aiworkforce.identity.repository.EmployeeRepository;
+import com.aiworkforce.identity.service.TeamMembershipService;
 import com.aiworkforce.integration.entity.TaskIntegrationConfig;
 import com.aiworkforce.task.entity.Task;
 import com.aiworkforce.task.repository.TaskRepository;
@@ -40,6 +41,9 @@ public class JiraApiClientTest {
     @Mock
     private EmployeeRepository employeeRepository;
 
+    @Mock
+    private TeamMembershipService membershipService;
+
     private ObjectMapper objectMapper;
     private JiraApiClient jiraApiClient;
     private HttpServer server;
@@ -48,7 +52,7 @@ public class JiraApiClientTest {
     @BeforeEach
     void setUp() {
         objectMapper = new ObjectMapper();
-        jiraApiClient = new JiraApiClient(taskRepository, employeeRepository, objectMapper, new TaskAssessmentService());
+        jiraApiClient = new JiraApiClient(taskRepository, employeeRepository, objectMapper, new TaskAssessmentService(), membershipService);
     }
 
     @AfterEach

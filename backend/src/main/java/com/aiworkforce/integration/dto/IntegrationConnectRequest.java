@@ -12,11 +12,15 @@ public class IntegrationConnectRequest {
     @NotNull
     private UUID teamId;
 
+    private UUID projectId;
+
     @NotNull
     private IntegrationProvider provider;
 
     @NotBlank
     private String projectKey;
+
+    private String jiraDomain;
 
     @NotBlank
     private String connectionKey; // PAT or installation token

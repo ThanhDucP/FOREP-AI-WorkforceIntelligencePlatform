@@ -5,6 +5,7 @@ import com.aiworkforce.core.enums.TaskPriority;
 import com.aiworkforce.core.enums.TaskStatus;
 import com.aiworkforce.identity.entity.Employee;
 import com.aiworkforce.identity.repository.EmployeeRepository;
+import com.aiworkforce.identity.service.TeamMembershipService;
 import com.aiworkforce.integration.entity.TaskIntegrationConfig;
 import com.aiworkforce.task.entity.Task;
 import com.aiworkforce.task.repository.TaskRepository;
@@ -31,6 +32,7 @@ public class JiraApiClient {
     private final EmployeeRepository employeeRepository;
     private final ObjectMapper objectMapper;
     private final TaskAssessmentService taskAssessmentService;
+    private final TeamMembershipService membershipService;
 
     // Field for testing
     private String jiraApiUrlOverride = null;
@@ -113,9 +115,14 @@ public class JiraApiClient {
                         assignee = employeeRepository.findByAccountEmail(emailAddress).orElse(null);
                     }
                 }
+                if (assignee != null && !membershipService.hasActiveTeamAccess(assignee.getId(), config.getTeam().getId())) {
+                    assignee = null;
+                }
 
-                Optional<Task> existingTaskOpt = taskRepository.findByExternalTicketRefAndSourceProvider(
-                        issueKey, IntegrationProvider.JIRA);
+                Optional<Task> existingTaskOpt = config.getProject() != null
+                        ? taskRepository.findByExternalTicketRefAndSourceProviderAndProjectId(
+                                issueKey, IntegrationProvider.JIRA, config.getProject().getId())
+                        : taskRepository.findByExternalTicketRefAndSourceProvider(issueKey, IntegrationProvider.JIRA);
 
                 Task task;
                 if (existingTaskOpt.isPresent()) {
@@ -125,12 +132,15 @@ public class JiraApiClient {
                     task.setExternalTicketRef(issueKey);
                     task.setSourceProvider(IntegrationProvider.JIRA);
                     task.setTeam(config.getTeam());
+                    task.setProject(config.getProject());
                 }
 
                 task.setTitle(summary);
                 task.setDescription(description);
                 task.setExternalUrl(externalUrl);
                 task.setAssignee(assignee);
+                task.setTeam(config.getTeam());
+                task.setProject(config.getProject());
                 task.setPriority(mapPriority(fields.path("priority").path("name").asText()));
                 task.setDueDate(parseDueDate(fields.path("duedate").asText(null)));
                 task.setEstimatedHours(estimateHours(fields));

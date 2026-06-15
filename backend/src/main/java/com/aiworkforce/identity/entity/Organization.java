@@ -13,6 +13,7 @@ public class Organization extends AuditableEntity {
     private String name;
     private String domain;
     private String logoUrl;
+    private String githubOrganization;
     
     private Double latitude;
     private Double longitude;

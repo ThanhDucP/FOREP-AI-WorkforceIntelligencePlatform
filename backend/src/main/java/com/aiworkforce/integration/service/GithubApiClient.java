@@ -5,6 +5,7 @@ import com.aiworkforce.core.enums.TaskPriority;
 import com.aiworkforce.core.enums.TaskStatus;
 import com.aiworkforce.identity.entity.Employee;
 import com.aiworkforce.identity.repository.EmployeeRepository;
+import com.aiworkforce.identity.service.TeamMembershipService;
 import com.aiworkforce.integration.entity.TaskIntegrationConfig;
 import com.aiworkforce.task.entity.Task;
 import com.aiworkforce.task.repository.TaskRepository;
@@ -30,6 +31,7 @@ public class GithubApiClient {
     private final EmployeeRepository employeeRepository;
     private final ObjectMapper objectMapper;
     private final TaskAssessmentService taskAssessmentService;
+    private final TeamMembershipService membershipService;
 
     // Field for testing
     private String githubApiUrl = "https://api.github.com";
@@ -104,9 +106,14 @@ public class GithubApiClient {
                         assignee = employeeRepository.findByAccountEmail(assigneeEmail).orElse(null);
                     }
                 }
+                if (assignee != null && !membershipService.hasActiveTeamAccess(assignee.getId(), config.getTeam().getId())) {
+                    assignee = null;
+                }
 
-                Optional<Task> existingTaskOpt = taskRepository.findByExternalTicketRefAndSourceProvider(
-                        externalTicketRef, IntegrationProvider.GITHUB);
+                Optional<Task> existingTaskOpt = config.getProject() != null
+                        ? taskRepository.findByExternalTicketRefAndSourceProviderAndProjectId(
+                                externalTicketRef, IntegrationProvider.GITHUB, config.getProject().getId())
+                        : taskRepository.findByExternalTicketRefAndSourceProvider(externalTicketRef, IntegrationProvider.GITHUB);
 
                 Task task;
                 if (existingTaskOpt.isPresent()) {
@@ -116,12 +123,15 @@ public class GithubApiClient {
                     task.setExternalTicketRef(externalTicketRef);
                     task.setSourceProvider(IntegrationProvider.GITHUB);
                     task.setTeam(config.getTeam());
+                    task.setProject(config.getProject());
                 }
 
                 task.setTitle(title);
                 task.setDescription(body);
                 task.setExternalUrl(htmlUrl);
                 task.setAssignee(assignee);
+                task.setTeam(config.getTeam());
+                task.setProject(config.getProject());
                 task.setPriority(mapPriority(issueNode.path("labels")));
                 task.setEstimatedHours(estimateHours(title, body));
 

@@ -12,6 +12,8 @@ import java.util.UUID;
 public class TaskIntegrationConfigResponse {
     private UUID id;
     private UUID teamId;
+    private UUID projectId;
+    private String projectName;
     private IntegrationProvider provider;
     private Boolean isActive;
     private String projectKey;

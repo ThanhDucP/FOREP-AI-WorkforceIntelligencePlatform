@@ -36,6 +36,7 @@ public class DataSeeder implements CommandLineRunner {
     private final RoleRepository roleRepository;
     private final TeamRepository teamRepository;
     private final OrganizationRepository organizationRepository;
+    private final ProjectRepository projectRepository;
     private final SprintRepository sprintRepository;
     private final TaskRepository taskRepository;
     private final TaskCommentRepository taskCommentRepository;
@@ -66,6 +67,7 @@ public class DataSeeder implements CommandLineRunner {
         Organization organization = new Organization();
         organization.setName("Apex AI Solutions");
         organization.setDomain("apexai.com");
+        organization.setGithubOrganization("apex-ai-solutions");
         organization.setLogoUrl("https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=150&auto=format&fit=crop&q=60");
         organization = organizationRepository.save(organization);
 
@@ -175,6 +177,11 @@ public class DataSeeder implements CommandLineRunner {
 
         employeeRepository.saveAll(List.of(johnDoe, aliceSmith, bobJohnson, charlieBrown, davidMiller, elenaRostova, graceHopper, frankCastle));
 
+        createProject("Core Platform API", "Backend platform and infrastructure project", organization, engineeringTeam,
+                "apex-ai-solutions/core-platform-api", "apexai.atlassian.net", "CORE");
+        createProject("Product Experience", "Product design and application experience project", organization, productTeam,
+                "apex-ai-solutions/product-experience", "apexai.atlassian.net", "PROD");
+
         // 6. Create Tasks for Sprint 24 (Active)
         // High Workload tasks for David Miller
         Task davidTask1 = createTask("Tối ưu hóa các truy vấn SQL database", "Cần tối ưu hóa lại index và nén phân vùng bảng để cải thiện tốc độ API thêm 30%.", TaskStatus.IN_PROGRESS, TaskPriority.HIGH, today.plusDays(2), 24, davidMiller, johnDoe, sprint24, engineeringTeam, 8);
@@ -260,6 +267,19 @@ public class DataSeeder implements CommandLineRunner {
         employee.setFocusScore(95.0);
 
         return employeeRepository.save(employee);
+    }
+
+    private Project createProject(String name, String description, Organization organization, Team team, String githubRepository, String jiraDomain, String jiraProjectKey) {
+        Project project = new Project();
+        project.setName(name);
+        project.setDescription(description);
+        project.setOrganization(organization);
+        project.setTeam(team);
+        project.setGithubRepository(githubRepository);
+        project.setJiraDomain(jiraDomain);
+        project.setJiraProjectKey(jiraProjectKey);
+        project.setActive(true);
+        return projectRepository.save(project);
     }
 
     private Task createTask(String title, String desc, TaskStatus status, TaskPriority priority, LocalDate due, int hours, Employee assignee, Employee reporter, Sprint sprint, Team team, int points) {

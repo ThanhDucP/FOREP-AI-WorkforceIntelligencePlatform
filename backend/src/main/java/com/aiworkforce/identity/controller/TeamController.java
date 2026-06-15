@@ -5,6 +5,8 @@ import com.aiworkforce.identity.dto.EmployeeResponse;
 import com.aiworkforce.identity.dto.TeamRequest;
 import com.aiworkforce.identity.dto.TeamResponse;
 import com.aiworkforce.identity.service.TeamService;
+import com.aiworkforce.identity.service.EmployeeService;
+import com.aiworkforce.identity.service.TeamMembershipService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -20,6 +22,8 @@ import java.util.UUID;
 public class TeamController {
 
     private final TeamService teamService;
+    private final TeamMembershipService membershipService;
+    private final EmployeeService employeeService;
 
     @GetMapping
     @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
@@ -73,6 +77,27 @@ public class TeamController {
     @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
     public ResponseEntity<ApiResponse<Void>> assignEmployeeToTeam(@PathVariable("id") UUID teamId, @RequestParam UUID employeeId) {
         teamService.assignEmployeeToTeam(employeeId, teamId);
+        return ResponseEntity.ok(ApiResponse.success(null));
+    }
+
+    @PostMapping("/{id}/members/request")
+    public ResponseEntity<ApiResponse<UUID>> requestJoinTeam(@PathVariable("id") UUID teamId) {
+        UUID employeeId = employeeService.getCurrentEmployee().getId();
+        return ResponseEntity.ok(ApiResponse.success(membershipService.requestJoinTeam(employeeId, teamId).getId()));
+    }
+
+    @PostMapping("/memberships/{membershipId}/approve")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
+    public ResponseEntity<ApiResponse<UUID>> approveMembership(@PathVariable UUID membershipId) {
+        UUID leadId = employeeService.getCurrentEmployee().getId();
+        return ResponseEntity.ok(ApiResponse.success(membershipService.approveMembership(membershipId, leadId).getId()));
+    }
+
+    @PostMapping("/members/{employeeId}/end-active")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
+    public ResponseEntity<ApiResponse<Void>> endActiveMembership(@PathVariable UUID employeeId) {
+        UUID leadId = employeeService.getCurrentEmployee().getId();
+        membershipService.endActiveMembership(employeeId, leadId);
         return ResponseEntity.ok(ApiResponse.success(null));
     }
 

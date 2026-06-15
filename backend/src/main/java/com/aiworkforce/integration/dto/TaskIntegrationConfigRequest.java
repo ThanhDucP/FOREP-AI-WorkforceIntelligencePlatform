@@ -12,6 +12,8 @@ public class TaskIntegrationConfigRequest {
     @NotNull(message = "Team ID is required")
     private UUID teamId;
 
+    private UUID projectId;
+
     @NotNull(message = "Provider is required")
     private IntegrationProvider provider;
 
@@ -20,5 +22,6 @@ public class TaskIntegrationConfigRequest {
 
     private String accessToken;
     private String projectKey;
+    private String jiraDomain;
     private Boolean isActive;
 }
