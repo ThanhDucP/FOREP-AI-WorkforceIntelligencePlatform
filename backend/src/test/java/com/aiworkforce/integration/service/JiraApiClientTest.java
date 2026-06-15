@@ -113,7 +113,7 @@ public class JiraApiClientTest {
 
     private void startJiraServer(String responseBody) throws IOException {
         server = HttpServer.create(new InetSocketAddress(0), 0);
-        server.createContext("/rest/api/2/search", exchange -> {
+        server.createContext("/rest/api/3/search/jql", exchange -> {
             authorizationHeader = exchange.getRequestHeaders().getFirst("Authorization");
             byte[] bytes = responseBody.getBytes(StandardCharsets.UTF_8);
             exchange.getResponseHeaders().add("Content-Type", "application/json; charset=utf-8");

@@ -72,7 +72,7 @@ public class JiraApiClient {
             String finalProjectKey = projectKey;
             String responseJson = webClient.get()
                     .uri(uriBuilder -> uriBuilder
-                            .path("/rest/api/2/search")
+                            .path("/rest/api/3/search/jql")
                             .queryParam("jql", "project=" + finalProjectKey)
                             .queryParam("maxResults", 100)
                             .build())
