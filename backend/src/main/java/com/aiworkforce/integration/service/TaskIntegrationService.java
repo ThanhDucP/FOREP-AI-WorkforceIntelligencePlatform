@@ -1,48 +1,64 @@
 package com.aiworkforce.integration.service;
 
 import com.aiworkforce.core.enums.IntegrationProvider;
-import com.aiworkforce.core.enums.RoleType;
+import com.aiworkforce.core.enums.IntegrationSyncStatus;
 import com.aiworkforce.core.exception.BusinessException;
 import com.aiworkforce.core.exception.ResourceNotFoundException;
-import com.aiworkforce.identity.entity.Employee;
+import com.aiworkforce.core.security.AccessPolicyService;
 import com.aiworkforce.identity.entity.Project;
 import com.aiworkforce.identity.entity.Team;
 import com.aiworkforce.identity.repository.ProjectRepository;
 import com.aiworkforce.identity.repository.TeamRepository;
-import com.aiworkforce.identity.service.EmployeeService;
-import com.aiworkforce.identity.service.TeamMembershipService;
 import com.aiworkforce.integration.dto.TaskIntegrationConfigRequest;
 import com.aiworkforce.integration.dto.IntegrationConnectRequest;
 import com.aiworkforce.integration.dto.IntegrationConnectResponse;
+import com.aiworkforce.integration.dto.IntegrationRuntimeStatusResponse;
+import com.aiworkforce.integration.dto.IntegrationSyncLogResponse;
 import com.aiworkforce.integration.dto.TaskIntegrationConfigResponse;
+import com.aiworkforce.integration.entity.IntegrationSyncLog;
 import com.aiworkforce.integration.entity.TaskIntegrationConfig;
+import com.aiworkforce.integration.repository.IntegrationSyncLogRepository;
 import com.aiworkforce.integration.repository.TaskIntegrationConfigRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.security.SecureRandom;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class TaskIntegrationService {
 
     private final TaskIntegrationConfigRepository configRepository;
     private final TeamRepository teamRepository;
     private final ProjectRepository projectRepository;
-    private final EmployeeService employeeService;
-    private final TeamMembershipService membershipService;
+    private final IntegrationSyncLogRepository syncLogRepository;
+    private final AccessPolicyService accessPolicyService;
     private final GithubApiClient githubApiClient;
     private final JiraApiClient jiraApiClient;
     private final GithubWebhookRegistrar githubWebhookRegistrar;
 
+    @Value("${integration.sync.enabled:true}")
+    private boolean scheduledSyncEnabled;
+
+    @Value("${integration.sync.success-interval-minutes:30}")
+    private long scheduledSuccessIntervalMinutes;
+
+    @Value("${integration.sync.failure-retry-delay-minutes:10}")
+    private long scheduledFailureRetryDelayMinutes;
+
     @Transactional
     public void syncTasks(UUID configId) {
         TaskIntegrationConfig config = getActiveConfigById(configId);
-        ensureProjectAccess(config);
+        accessPolicyService.ensureIntegrationAccess(config);
         syncConfig(config);
     }
 
@@ -51,7 +67,7 @@ public class TaskIntegrationService {
         Team team = teamRepository.findById(request.getTeamId())
                 .orElseThrow(() -> new ResourceNotFoundException("Team not found"));
         Project project = resolveProject(request.getProjectId(), team, request.getProjectKey(), request.getJiraDomain(), request.getProvider());
-        ensureTeamLeadOrAdmin(team);
+        accessPolicyService.ensureTeamManage(team);
 
         TaskIntegrationConfig config = new TaskIntegrationConfig();
         config.setTeam(team);
@@ -85,7 +101,7 @@ public class TaskIntegrationService {
                 saved.setIsActive(true);
                 if (res.webhookId != null) saved.setProviderWebhookId(res.webhookId);
                 saved = configRepository.save(saved);
-                githubApiClient.syncIssues(saved);
+                syncConfig(saved);
                 resp.setWebhookRegistered(true);
                 resp.setMessage("Webhook registered automatically and GitHub tasks synced");
             } else {
@@ -93,7 +109,7 @@ public class TaskIntegrationService {
                 resp.setMessage("Auto-registration failed: " + res.message);
             }
         } else if (request.getProvider() == IntegrationProvider.JIRA) {
-            jiraApiClient.syncIssues(saved);
+            syncConfig(saved);
             resp.setWebhookRegistered(true);
             resp.setMessage("Jira connected and tasks synced");
         } else {
@@ -116,7 +132,7 @@ public class TaskIntegrationService {
         Team team = teamRepository.findById(request.getTeamId())
                 .orElseThrow(() -> new ResourceNotFoundException("Team not found"));
         Project project = resolveProject(request.getProjectId(), team, request.getProjectKey(), request.getJiraDomain(), request.getProvider());
-        ensureTeamLeadOrAdmin(team);
+        accessPolicyService.ensureTeamManage(team);
 
         TaskIntegrationConfig config = new TaskIntegrationConfig();
         config.setTeam(team);
@@ -137,10 +153,60 @@ public class TaskIntegrationService {
     public List<TaskIntegrationConfigResponse> getConfigsByTeam(UUID teamId) {
         Team team = teamRepository.findById(teamId)
                 .orElseThrow(() -> new ResourceNotFoundException("Team not found"));
-        ensureProjectAccess(team);
+        accessPolicyService.ensureTeamAccess(team);
         return configRepository.findByTeamId(teamId).stream()
                 .map(this::mapToResponse)
                 .collect(Collectors.toList());
+    }
+
+    public List<IntegrationSyncLogResponse> getSyncLogs(UUID configId) {
+        TaskIntegrationConfig config = getConfigById(configId);
+        accessPolicyService.ensureIntegrationAccess(config);
+        return syncLogRepository.findTop20ByConfigIdOrderByStartedAtDesc(configId).stream()
+                .map(this::mapSyncLogToResponse)
+                .toList();
+    }
+
+    public IntegrationRuntimeStatusResponse getRuntimeStatus() {
+        List<TaskIntegrationConfig> activeConfigs = configRepository.findByIsActiveTrue();
+        long failedConfigCount = activeConfigs.stream()
+                .filter(config -> config.getLastSyncStatus() == IntegrationSyncStatus.FAILED)
+                .count();
+        LocalDateTime latestSyncAt = activeConfigs.stream()
+                .map(TaskIntegrationConfig::getLastSyncAt)
+                .filter(syncAt -> syncAt != null)
+                .max(LocalDateTime::compareTo)
+                .orElse(null);
+
+        return IntegrationRuntimeStatusResponse.builder()
+                .scheduledSyncEnabled(scheduledSyncEnabled)
+                .successIntervalMinutes(scheduledSuccessIntervalMinutes)
+                .failureRetryDelayMinutes(scheduledFailureRetryDelayMinutes)
+                .activeConfigCount(activeConfigs.size())
+                .failedConfigCount(failedConfigCount)
+                .latestSyncAt(latestSyncAt)
+                .build();
+    }
+
+    @Scheduled(cron = "${integration.sync.cron:0 */15 * * * *}")
+    @Transactional
+    public void syncActiveConfigsOnSchedule() {
+        if (!scheduledSyncEnabled) {
+            return;
+        }
+
+        List<TaskIntegrationConfig> activeConfigs = configRepository.findByIsActiveTrue();
+        for (TaskIntegrationConfig config : activeConfigs) {
+            if (!shouldRunScheduledSync(config)) {
+                continue;
+            }
+
+            try {
+                syncConfig(config);
+            } catch (RuntimeException ex) {
+                log.warn("Scheduled sync failed for integration config {}: {}", config.getId(), ex.getMessage());
+            }
+        }
     }
     
     public TaskIntegrationConfig getConfigById(UUID id) {
@@ -156,7 +222,7 @@ public class TaskIntegrationService {
     @Transactional
     public TaskIntegrationConfigResponse updateConfig(UUID id, TaskIntegrationConfigRequest request) {
         TaskIntegrationConfig config = getConfigById(id);
-        ensureTeamLeadOrAdmin(config.getTeam());
+        accessPolicyService.ensureIntegrationManage(config);
         
         if (request.getWebhookSecret() != null && !request.getWebhookSecret().isBlank()) {
             config.setWebhookSecret(request.getWebhookSecret());
@@ -177,7 +243,7 @@ public class TaskIntegrationService {
     @Transactional
     public void deleteConfig(UUID id) {
         TaskIntegrationConfig config = getConfigById(id);
-        ensureTeamLeadOrAdmin(config.getTeam());
+        accessPolicyService.ensureIntegrationManage(config);
         configRepository.delete(config);
     }
 
@@ -190,19 +256,78 @@ public class TaskIntegrationService {
                 .provider(config.getProvider())
                 .isActive(config.getIsActive())
                 .projectKey(config.getProjectKey())
+                .lastSyncAt(config.getLastSyncAt())
+                .lastSyncStatus(config.getLastSyncStatus())
+                .lastSyncError(config.getLastSyncError())
                 .createdAt(config.getCreatedAt())
                 .updatedAt(config.getUpdatedAt())
                 .build();
     }
 
     private void syncConfig(TaskIntegrationConfig config) {
-        if (config.getProvider() == IntegrationProvider.GITHUB) {
-            githubApiClient.syncIssues(config);
-        } else if (config.getProvider() == IntegrationProvider.JIRA) {
-            jiraApiClient.syncIssues(config);
-        } else {
-            throw new IllegalArgumentException("Unsupported sync provider: " + config.getProvider());
+        IntegrationSyncLog syncLog = new IntegrationSyncLog();
+        syncLog.setConfig(config);
+        syncLog.setProvider(config.getProvider());
+        syncLog.setStatus(IntegrationSyncStatus.STARTED);
+        syncLog.setStartedAt(LocalDateTime.now());
+        syncLog.setMessage("Sync started");
+        syncLog = syncLogRepository.save(syncLog);
+
+        try {
+            if (config.getProvider() == IntegrationProvider.GITHUB) {
+                githubApiClient.syncIssues(config);
+            } else if (config.getProvider() == IntegrationProvider.JIRA) {
+                jiraApiClient.syncIssues(config);
+            } else {
+                throw new IllegalArgumentException("Unsupported sync provider: " + config.getProvider());
+            }
+
+            LocalDateTime finishedAt = LocalDateTime.now();
+            syncLog.setStatus(IntegrationSyncStatus.SUCCESS);
+            syncLog.setFinishedAt(finishedAt);
+            syncLog.setMessage("Sync completed successfully");
+            syncLogRepository.save(syncLog);
+
+            config.setLastSyncAt(finishedAt);
+            config.setLastSyncStatus(IntegrationSyncStatus.SUCCESS);
+            config.setLastSyncError(null);
+            configRepository.save(config);
+        } catch (RuntimeException ex) {
+            LocalDateTime finishedAt = LocalDateTime.now();
+            syncLog.setStatus(IntegrationSyncStatus.FAILED);
+            syncLog.setFinishedAt(finishedAt);
+            syncLog.setMessage(ex.getMessage());
+            syncLogRepository.save(syncLog);
+
+            config.setLastSyncAt(finishedAt);
+            config.setLastSyncStatus(IntegrationSyncStatus.FAILED);
+            config.setLastSyncError(ex.getMessage());
+            configRepository.save(config);
+            throw ex;
         }
+    }
+
+    private IntegrationSyncLogResponse mapSyncLogToResponse(IntegrationSyncLog syncLog) {
+        return IntegrationSyncLogResponse.builder()
+                .id(syncLog.getId())
+                .configId(syncLog.getConfig().getId())
+                .provider(syncLog.getProvider())
+                .status(syncLog.getStatus())
+                .startedAt(syncLog.getStartedAt())
+                .finishedAt(syncLog.getFinishedAt())
+                .message(syncLog.getMessage())
+                .build();
+    }
+
+    private boolean shouldRunScheduledSync(TaskIntegrationConfig config) {
+        if (config.getLastSyncAt() == null || config.getLastSyncStatus() == null) {
+            return true;
+        }
+
+        LocalDateTime nextRunAt = config.getLastSyncStatus() == IntegrationSyncStatus.FAILED
+                ? config.getLastSyncAt().plusMinutes(scheduledFailureRetryDelayMinutes)
+                : config.getLastSyncAt().plusMinutes(scheduledSuccessIntervalMinutes);
+        return !LocalDateTime.now().isBefore(nextRunAt);
     }
 
     private Project resolveProject(UUID projectId, Team team, String providerProjectKey, String jiraDomain, IntegrationProvider provider) {
@@ -211,6 +336,9 @@ public class TaskIntegrationService {
                     .orElseThrow(() -> new ResourceNotFoundException("Project not found"));
             if (!project.getTeam().getId().equals(team.getId())) {
                 throw new BusinessException("Project does not belong to the requested team");
+            }
+            if (!project.isActive()) {
+                throw new BusinessException("Project is inactive");
             }
             return project;
         }
@@ -249,33 +377,4 @@ public class TaskIntegrationService {
         return domain.replace("https://", "").replace("http://", "").replaceAll("/+$", "");
     }
 
-    private void ensureProjectAccess(TaskIntegrationConfig config) {
-        ensureProjectAccess(config.getTeam());
-    }
-
-    private void ensureProjectAccess(Team team) {
-        Employee current = employeeService.getCurrentEmployee();
-        if (hasAdminRole(current) || isTeamLead(current, team) || membershipService.hasActiveTeamAccess(current.getId(), team.getId())) {
-            return;
-        }
-        throw new BusinessException("Current user does not have access to this team project");
-    }
-
-    private void ensureTeamLeadOrAdmin(Team team) {
-        Employee current = employeeService.getCurrentEmployee();
-        if (hasAdminRole(current) || isTeamLead(current, team)) {
-            return;
-        }
-        throw new BusinessException("Only organization admins or the team lead can manage project integrations");
-    }
-
-    private boolean isTeamLead(Employee employee, Team team) {
-        return team.getManager() != null && team.getManager().getId().equals(employee.getId());
-    }
-
-    private boolean hasAdminRole(Employee employee) {
-        return employee.getAccount() != null
-                && employee.getAccount().getRole() != null
-                && employee.getAccount().getRole().getName() == RoleType.ADMIN;
-    }
 }

@@ -1,18 +1,18 @@
 package com.aiworkforce.task.service;
 
 import com.aiworkforce.core.enums.EventType;
-import com.aiworkforce.core.enums.RoleType;
 import com.aiworkforce.core.enums.TaskStatus;
 import com.aiworkforce.core.exception.BusinessException;
 import com.aiworkforce.core.exception.ResourceNotFoundException;
+import com.aiworkforce.core.security.AccessPolicyService;
 import com.aiworkforce.identity.entity.Employee;
+import com.aiworkforce.identity.entity.Project;
 import com.aiworkforce.identity.entity.Sprint;
 import com.aiworkforce.identity.entity.Team;
 import com.aiworkforce.identity.repository.EmployeeRepository;
+import com.aiworkforce.identity.repository.ProjectRepository;
 import com.aiworkforce.identity.repository.SprintRepository;
 import com.aiworkforce.identity.repository.TeamRepository;
-import com.aiworkforce.identity.service.EmployeeService;
-import com.aiworkforce.identity.service.TeamMembershipService;
 import com.aiworkforce.event.entity.WorkloadEvent;
 import com.aiworkforce.event.publisher.EventPublisher;
 import com.aiworkforce.task.dto.TaskRequest;
@@ -38,12 +38,12 @@ public class TaskService {
     
     private final TaskRepository taskRepository;
     private final EmployeeRepository employeeRepository;
+    private final ProjectRepository projectRepository;
     private final TeamRepository teamRepository;
     private final SprintRepository sprintRepository;
-    private final EmployeeService employeeService;
+    private final AccessPolicyService accessPolicyService;
     private final EventPublisher eventPublisher;
     private final TaskAssessmentService taskAssessmentService;
-    private final TeamMembershipService membershipService;
 
     @Transactional
     public Task createTask(TaskRequest request) {
@@ -61,13 +61,13 @@ public class TaskService {
     public Task getTask(UUID id) {
         Task task = taskRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Task not found"));
-        ensureTaskAccess(task);
+        accessPolicyService.ensureTaskAccess(task);
         return task;
     }
 
     public List<Task> getAllTasks() {
-        Employee current = employeeService.getCurrentEmployee();
-        if (hasAdminRole(current)) {
+        Employee current = accessPolicyService.currentEmployee();
+        if (accessPolicyService.isAdmin(current)) {
             return taskRepository.findAll();
         }
         List<UUID> managedTeamIds = teamRepository.findByManagerId(current.getId()).stream()
@@ -76,42 +76,57 @@ public class TaskService {
         if (!managedTeamIds.isEmpty()) {
             return taskRepository.findByTeamIdIn(managedTeamIds);
         }
-        return membershipService.getActiveMembership(current.getId())
-                .map(membership -> taskRepository.findByTeamId(membership.getTeam().getId()))
-                .orElse(Collections.emptyList());
+        return Collections.emptyList();
     }
 
     public List<Task> getMyTasks() {
-        Employee currentEmployee = employeeService.getCurrentEmployee();
+        Employee currentEmployee = accessPolicyService.currentEmployee();
         return getTasksByEmployee(currentEmployee.getId());
+    }
+
+    public List<Task> getTasksByProject(UUID projectId) {
+        Project project = projectRepository.findById(projectId)
+                .orElseThrow(() -> new ResourceNotFoundException("Project not found"));
+        accessPolicyService.ensureProjectAccess(project);
+        return taskRepository.findByProjectId(projectId);
+    }
+
+    public List<Task> getTasksForCurrentActiveTeam() {
+        Employee current = accessPolicyService.currentEmployee();
+        return taskRepository.findByTeamId(current.getTeam().getId());
     }
 
     public List<Task> getTasksByEmployee(UUID employeeId) {
         ensureEmployeeExists(employeeId, "Employee not found with id: " + employeeId);
-        return taskRepository.findByAssigneeId(employeeId);
+        return taskRepository.findByAssigneeId(employeeId).stream()
+                .filter(task -> accessPolicyService.canAccessTask(accessPolicyService.currentEmployee(), task))
+                .toList();
     }
 
     public List<Task> getTasksByReporter(UUID reporterId) {
         ensureEmployeeExists(reporterId, "Reporter not found with id: " + reporterId);
-        return taskRepository.findByReporterId(reporterId);
+        return taskRepository.findByReporterId(reporterId).stream()
+                .filter(task -> accessPolicyService.canAccessTask(accessPolicyService.currentEmployee(), task))
+                .toList();
     }
 
     public List<Task> getTasksByTeam(UUID teamId) {
-        ensureTeamExists(teamId);
-        ensureTeamAccess(teamId);
+        Team team = teamRepository.findById(teamId)
+                .orElseThrow(() -> new ResourceNotFoundException("Team not found with id: " + teamId));
+        accessPolicyService.ensureTeamAccess(team);
         return taskRepository.findByTeamId(teamId);
     }
 
     public List<Task> getTasksByOrganization(UUID organizationId) {
-        Employee current = employeeService.getCurrentEmployee();
-        if (!hasAdminRole(current)) {
+        Employee current = accessPolicyService.currentEmployee();
+        if (!accessPolicyService.isAdmin(current)) {
             throw new BusinessException("Only admins can view all organization tasks");
         }
         return taskRepository.findByTeamOrganizationId(organizationId);
     }
 
     public List<Task> getTasksForManagedTeams() {
-        Employee currentEmployee = employeeService.getCurrentEmployee();
+        Employee currentEmployee = accessPolicyService.currentEmployee();
         List<UUID> teamIds = teamRepository.findByManagerId(currentEmployee.getId()).stream()
                 .map(Team::getId)
                 .collect(Collectors.toList());
@@ -125,14 +140,16 @@ public class TaskService {
 
     public List<Task> getTasksBySprint(UUID sprintId) {
         ensureSprintExists(sprintId);
+        Employee current = accessPolicyService.currentEmployee();
         return taskRepository.findBySprintId(sprintId).stream()
-                .filter(this::canAccessTask)
+                .filter(task -> accessPolicyService.canAccessTask(current, task))
                 .toList();
     }
 
     public List<Task> getTasksByStatus(TaskStatus status) {
+        Employee current = accessPolicyService.currentEmployee();
         return taskRepository.findByStatus(status).stream()
-                .filter(this::canAccessTask)
+                .filter(task -> accessPolicyService.canAccessTask(current, task))
                 .toList();
     }
 
@@ -227,11 +244,26 @@ public class TaskService {
             task.setReporter(null);
         }
 
-        if (request.getTeamId() != null) {
+        if (request.getProjectId() != null) {
+            Project project = projectRepository.findById(request.getProjectId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Project not found"));
+            if (!project.isActive()) {
+                throw new BusinessException("Project is inactive");
+            }
+            if (request.getTeamId() != null && !project.getTeam().getId().equals(request.getTeamId())) {
+                throw new BusinessException("Task team must match the selected project team");
+            }
+            accessPolicyService.ensureProjectAccess(project);
+            task.setProject(project);
+            task.setTeam(project.getTeam());
+        } else if (request.getTeamId() != null) {
             Team team = teamRepository.findById(request.getTeamId())
                     .orElseThrow(() -> new ResourceNotFoundException("Team not found"));
+            accessPolicyService.ensureTeamAccess(team);
+            task.setProject(null);
             task.setTeam(team);
         } else {
+            task.setProject(null);
             task.setTeam(assignee != null ? assignee.getTeam() : null);
         }
 
@@ -266,43 +298,6 @@ public class TaskService {
         if (!employeeRepository.existsById(employeeId)) {
             throw new ResourceNotFoundException(message);
         }
-    }
-
-    private void ensureTeamExists(UUID teamId) {
-        if (!teamRepository.existsById(teamId)) {
-            throw new ResourceNotFoundException("Team not found with id: " + teamId);
-        }
-    }
-
-    private void ensureTaskAccess(Task task) {
-        if (!canAccessTask(task)) {
-            throw new BusinessException("Current user does not have access to this task");
-        }
-    }
-
-    private void ensureTeamAccess(UUID teamId) {
-        Employee current = employeeService.getCurrentEmployee();
-        if (hasAdminRole(current)
-                || teamRepository.findByManagerId(current.getId()).stream().anyMatch(team -> team.getId().equals(teamId))
-                || membershipService.hasActiveTeamAccess(current.getId(), teamId)) {
-            return;
-        }
-        throw new BusinessException("Current user does not have access to this team");
-    }
-
-    private boolean canAccessTask(Task task) {
-        if (task.getTeam() == null) return false;
-        Employee current = employeeService.getCurrentEmployee();
-        UUID teamId = task.getTeam().getId();
-        return hasAdminRole(current)
-                || teamRepository.findByManagerId(current.getId()).stream().anyMatch(team -> team.getId().equals(teamId))
-                || membershipService.hasActiveTeamAccess(current.getId(), teamId);
-    }
-
-    private boolean hasAdminRole(Employee employee) {
-        return employee.getAccount() != null
-                && employee.getAccount().getRole() != null
-                && employee.getAccount().getRole().getName() == RoleType.ADMIN;
     }
 
     private void ensureSprintExists(UUID sprintId) {

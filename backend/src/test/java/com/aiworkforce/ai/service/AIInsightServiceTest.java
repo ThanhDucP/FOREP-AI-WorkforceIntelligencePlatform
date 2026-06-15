@@ -43,6 +43,9 @@ public class AIInsightServiceTest {
     private PromptBuilder promptBuilder;
 
     @Mock
+    private RagContextService ragContextService;
+
+    @Mock
     private DashboardAnalyticsService analyticsService;
 
     @Mock
@@ -167,6 +170,7 @@ public class AIInsightServiceTest {
     private void mockBaseGeneration(DashboardResponse response) {
         when(employeeRepository.findById(employeeId)).thenReturn(Optional.of(employee));
         when(analyticsService.getEmployeeDashboard(employeeId)).thenReturn(response);
-        when(promptBuilder.buildBurnoutPrompt(anyString(), any(DashboardResponse.class))).thenReturn("mock-prompt");
+        when(ragContextService.buildEmployeeContext(employee)).thenReturn("mock-rag-context");
+        when(promptBuilder.buildBurnoutPrompt(anyString(), any(DashboardResponse.class), anyString())).thenReturn("mock-prompt");
     }
 }

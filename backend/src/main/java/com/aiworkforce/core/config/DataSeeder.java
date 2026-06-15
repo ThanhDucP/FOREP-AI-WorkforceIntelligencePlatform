@@ -15,6 +15,7 @@ import com.aiworkforce.task.repository.TaskRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.CommandLineRunner;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -27,6 +28,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 @Component
+@ConditionalOnProperty(prefix = "app", name = "seed-demo-data", havingValue = "true")
 @RequiredArgsConstructor
 @Slf4j
 public class DataSeeder implements CommandLineRunner {
@@ -177,9 +179,9 @@ public class DataSeeder implements CommandLineRunner {
 
         employeeRepository.saveAll(List.of(johnDoe, aliceSmith, bobJohnson, charlieBrown, davidMiller, elenaRostova, graceHopper, frankCastle));
 
-        createProject("Core Platform API", "Backend platform and infrastructure project", organization, engineeringTeam,
+        Project engineeringProject = createProject("Core Platform API", "Backend platform and infrastructure project", organization, engineeringTeam,
                 "apex-ai-solutions/core-platform-api", "apexai.atlassian.net", "CORE");
-        createProject("Product Experience", "Product design and application experience project", organization, productTeam,
+        Project productProject = createProject("Product Experience", "Product design and application experience project", organization, productTeam,
                 "apex-ai-solutions/product-experience", "apexai.atlassian.net", "PROD");
 
         // 6. Create Tasks for Sprint 24 (Active)
@@ -205,6 +207,14 @@ public class DataSeeder implements CommandLineRunner {
 
         // Frank Castle
         createTask("Vẽ Wireframe module Quản lý Sprint của Admin", "Thiết kế các mockup giao diện admin, quản lý tài khoản và thiết lập hệ thống.", TaskStatus.IN_PROGRESS, TaskPriority.HIGH, today.plusDays(4), 16, frankCastle, graceHopper, sprint24, productTeam, 5);
+
+        List<Task> engineeringTasks = taskRepository.findByTeamId(engineeringTeam.getId());
+        engineeringTasks.forEach(task -> task.setProject(engineeringProject));
+        taskRepository.saveAll(engineeringTasks);
+
+        List<Task> productTasks = taskRepository.findByTeamId(productTeam.getId());
+        productTasks.forEach(task -> task.setProject(productProject));
+        taskRepository.saveAll(productTasks);
 
         // 7. Capture current workload snapshots from seeded task data
         for (Employee emp : seededEmployees) {

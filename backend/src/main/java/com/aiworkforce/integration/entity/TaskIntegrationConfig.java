@@ -2,11 +2,14 @@ package com.aiworkforce.integration.entity;
 
 import com.aiworkforce.core.base.AuditableEntity;
 import com.aiworkforce.core.enums.IntegrationProvider;
+import com.aiworkforce.core.enums.IntegrationSyncStatus;
 import com.aiworkforce.identity.entity.Project;
 import com.aiworkforce.identity.entity.Team;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
+
+import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "task_integration_config")
@@ -39,4 +42,12 @@ public class TaskIntegrationConfig extends AuditableEntity {
     
     // ID returned by provider when webhook is created (optional)
     private String providerWebhookId;
+
+    private LocalDateTime lastSyncAt;
+
+    @Enumerated(EnumType.STRING)
+    private IntegrationSyncStatus lastSyncStatus;
+
+    @Column(columnDefinition = "TEXT")
+    private String lastSyncError;
 }

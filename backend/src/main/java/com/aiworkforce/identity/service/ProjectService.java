@@ -2,6 +2,7 @@ package com.aiworkforce.identity.service;
 
 import com.aiworkforce.core.exception.BusinessException;
 import com.aiworkforce.core.exception.ResourceNotFoundException;
+import com.aiworkforce.core.security.AccessPolicyService;
 import com.aiworkforce.identity.dto.ProjectRequest;
 import com.aiworkforce.identity.dto.ProjectResponse;
 import com.aiworkforce.identity.entity.Organization;
@@ -24,23 +25,33 @@ public class ProjectService {
     private final ProjectRepository projectRepository;
     private final OrganizationRepository organizationRepository;
     private final TeamRepository teamRepository;
+    private final AccessPolicyService accessPolicyService;
 
     public List<ProjectResponse> getProjectsByTeam(UUID teamId) {
+        Team team = teamRepository.findById(teamId)
+                .orElseThrow(() -> new ResourceNotFoundException("Team not found"));
+        accessPolicyService.ensureTeamAccess(team);
         return projectRepository.findByTeamId(teamId).stream().map(this::mapToResponse).toList();
     }
 
     public List<ProjectResponse> getProjectsByOrganization(UUID organizationId) {
+        if (!accessPolicyService.isAdmin(accessPolicyService.currentEmployee())) {
+            throw new BusinessException("Only admins can view all organization projects");
+        }
         return projectRepository.findByOrganizationId(organizationId).stream().map(this::mapToResponse).toList();
     }
 
     public ProjectResponse getProject(UUID id) {
-        return mapToResponse(findProject(id));
+        Project project = findProject(id);
+        accessPolicyService.ensureProjectAccess(project);
+        return mapToResponse(project);
     }
 
     @Transactional
     public ProjectResponse createProject(ProjectRequest request) {
         Project project = new Project();
         apply(project, request);
+        accessPolicyService.ensureProjectManage(project);
         return mapToResponse(projectRepository.save(project));
     }
 
@@ -48,6 +59,7 @@ public class ProjectService {
     public ProjectResponse updateProject(UUID id, ProjectRequest request) {
         Project project = findProject(id);
         apply(project, request);
+        accessPolicyService.ensureProjectManage(project);
         return mapToResponse(projectRepository.save(project));
     }
 

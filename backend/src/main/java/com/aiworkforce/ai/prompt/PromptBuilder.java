@@ -9,6 +9,10 @@ import java.util.stream.Collectors;
 public class PromptBuilder {
 
     public String buildBurnoutPrompt(String employeeName, DashboardResponse analyticsData) {
+        return buildBurnoutPrompt(employeeName, analyticsData, "");
+    }
+
+    public String buildBurnoutPrompt(String employeeName, DashboardResponse analyticsData, String ragContext) {
         String trends = "";
         if (analyticsData.getRecentTrends() != null && !analyticsData.getRecentTrends().isEmpty()) {
             trends = analyticsData.getRecentTrends().stream()
@@ -17,26 +21,30 @@ public class PromptBuilder {
         }
 
         return String.format("""
-                Bạn là chuyên gia cao cấp về phân tích hiệu suất nhân sự và tâm lý học tổ chức.
-                Hãy phân tích rủi ro kiệt sức của nhân viên: %s.
+                Ban la chuyen gia cao cap ve phan tich hieu suat nhan su va tam ly hoc to chuc.
+                Hay phan tich rui ro kiet suc cua nhan vien: %s.
 
-                Dữ liệu hiện có:
-                - Số tác vụ hoàn thành gần đây: %d
-                - Số tác vụ trễ hạn gần đây: %d
-                - Workload Score hiện tại: %d
-                - Mức rủi ro hệ thống phát hiện: %s
-                - Xu hướng workload gần đây: %s
+                Du lieu analytics hien co:
+                - So tac vu hoan thanh gan day: %d
+                - So tac vu tre han gan day: %d
+                - Workload Score hien tai: %d
+                - Muc rui ro he thong phat hien: %s
+                - Xu huong workload gan day: %s
 
-                Yêu cầu:
-                - Trả về đúng một JSON object hợp lệ, không markdown, không giải thích ngoài JSON.
-                - Viết bằng tiếng Việt chuyên nghiệp, ngắn gọn, dùng được cho quản lý nhân sự.
-                - Khuyến nghị phải cụ thể và có thể hành động.
+                Boi canh truy xuat tu he thong noi bo (RAG):
+                %s
 
-                Cấu trúc JSON bắt buộc:
+                Yeu cau:
+                - Tra ve dung mot JSON object hop le, khong markdown, khong giai thich ngoai JSON.
+                - Viet bang tieng Viet chuyen nghiep, ngan gon, dung duoc cho quan ly nhan su.
+                - Khuyen nghi phai cu the va co the hanh dong.
+                - Chi dua ra ket luan dua tren analytics va boi canh RAG duoc cung cap.
+
+                Cau truc JSON bat buoc:
                 {
-                  "status_evaluation": "Đánh giá hiện trạng làm việc",
-                  "primary_reason": "Nguyên nhân chính dựa trên dữ liệu",
-                  "recommendations": ["Khuyến nghị 1", "Khuyến nghị 2", "Khuyến nghị 3"]
+                  "status_evaluation": "Danh gia hien trang lam viec",
+                  "primary_reason": "Nguyen nhan chinh dua tren du lieu",
+                  "recommendations": ["Khuyen nghi 1", "Khuyen nghi 2", "Khuyen nghi 3"]
                 }
                 """,
                 employeeName,
@@ -44,7 +52,8 @@ public class PromptBuilder {
                 analyticsData.getTotalOverdueTasks(),
                 analyticsData.getCurrentWorkloadScore(),
                 analyticsData.getBurnoutRiskLevel(),
-                trends.isBlank() ? "Chưa có dữ liệu xu hướng" : trends
+                trends.isBlank() ? "Chua co du lieu xu huong" : trends,
+                ragContext == null || ragContext.isBlank() ? "Khong co boi canh bo sung." : ragContext
         );
     }
 }

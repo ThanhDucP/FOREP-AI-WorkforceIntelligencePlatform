@@ -48,6 +48,7 @@ public class AuthController {
         OAuth2LoginLinksResponse response = OAuth2LoginLinksResponse.builder()
                 .google(isOAuth2ProviderConfigured("google") ? baseUrl + "/api/v1/auth/oauth2/google" : null)
                 .github(isOAuth2ProviderConfigured("github") ? baseUrl + "/api/v1/auth/oauth2/github" : null)
+                .jira(isOAuth2ProviderConfigured("jira") ? baseUrl + "/api/v1/auth/oauth2/jira" : null)
                 .build();
 
         return ResponseEntity.ok(ApiResponse.success(response, "OAuth2 login links"));
@@ -77,6 +78,19 @@ public class AuthController {
         }
 
         response.sendRedirect("/oauth2/authorization/github");
+    }
+
+    @GetMapping("/oauth2/jira")
+    public void jiraLogin(HttpServletResponse response) throws IOException {
+        if (!isOAuth2ProviderConfigured("jira")) {
+            response.sendError(
+                    HttpServletResponse.SC_SERVICE_UNAVAILABLE,
+                    "Jira OAuth2 is not configured. Set SPRING_PROFILES_ACTIVE=dev,oauth2-jira and provide JIRA_CLIENT_ID and JIRA_CLIENT_SECRET."
+            );
+            return;
+        }
+
+        response.sendRedirect("/oauth2/authorization/jira");
     }
 
     private boolean isOAuth2ProviderConfigured(String registrationId) {

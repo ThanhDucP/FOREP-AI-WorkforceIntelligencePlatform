@@ -19,3 +19,6 @@ logging:
     com.aiworkforce: DEBUG
     org.springframework.security: DEBUG
     org.hibernate.SQL: DEBUG
+
+app:
+  seed-demo-data: true

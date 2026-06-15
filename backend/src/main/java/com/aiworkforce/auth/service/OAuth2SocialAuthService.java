@@ -36,6 +36,9 @@ public class OAuth2SocialAuthService {
     @Transactional
     public AuthResponse loginWithOAuth2(String registrationId, Map<String, Object> attributes) {
         SocialProfile profile = SocialProfile.from(registrationId, attributes);
+        if (profile.providerUserId() == null || profile.providerUserId().isBlank()) {
+            throw new BusinessException("OAuth2 provider did not return a stable user id");
+        }
 
         Account account = resolveAccount(profile);
         account = linkProviderData(account, profile);
@@ -69,6 +72,7 @@ public class OAuth2SocialAuthService {
         Optional<Account> linkedAccount = switch (profile.provider()) {
             case GOOGLE -> accountRepository.findByGoogleId(profile.providerUserId());
             case GITHUB -> accountRepository.findByGithubId(profile.providerUserId());
+            case JIRA -> accountRepository.findByJiraId(profile.providerUserId());
         };
 
         if (linkedAccount.isPresent()) {
@@ -100,6 +104,9 @@ public class OAuth2SocialAuthService {
         }
         if (profile.provider() == SocialProfile.Provider.GITHUB && account.getGithubId() == null) {
             account.setGithubId(profile.providerUserId());
+        }
+        if (profile.provider() == SocialProfile.Provider.JIRA && account.getJiraId() == null) {
+            account.setJiraId(profile.providerUserId());
         }
 
         if (account.getAvatarUrl() == null || account.getAvatarUrl().isBlank()) {
@@ -142,7 +149,8 @@ public class OAuth2SocialAuthService {
     ) {
         enum Provider {
             GOOGLE,
-            GITHUB
+            GITHUB,
+            JIRA
         }
 
         static SocialProfile from(String registrationId, Map<String, Object> attributes) {
@@ -150,6 +158,7 @@ public class OAuth2SocialAuthService {
             return switch (provider) {
                 case GOOGLE -> fromGoogle(attributes);
                 case GITHUB -> fromGithub(attributes);
+                case JIRA -> fromJira(attributes);
             };
         }
 
@@ -178,6 +187,20 @@ public class OAuth2SocialAuthService {
 
             NameParts parts = splitNames(null, null, displayName != null ? displayName : login, email);
             return new SocialProfile(Provider.GITHUB, providerUserId, email, parts.firstName(), parts.lastName(), avatarUrl, initials(parts.firstName(), parts.lastName(), displayName != null ? displayName : login, email));
+        }
+
+        private static SocialProfile fromJira(Map<String, Object> attributes) {
+            String providerUserId = firstStringValue(attributes, "account_id", "accountId", "sub");
+            String displayName = firstStringValue(attributes, "name", "displayName");
+            String email = firstStringValue(attributes, "email", "emailAddress");
+            String avatarUrl = firstStringValue(attributes, "picture", "avatarUrl");
+
+            if (email == null || email.isBlank()) {
+                email = "jira-" + providerUserId + "@users.noreply.atlassian.com";
+            }
+
+            NameParts parts = splitNames(null, null, displayName, email);
+            return new SocialProfile(Provider.JIRA, providerUserId, email, parts.firstName(), parts.lastName(), avatarUrl, initials(parts.firstName(), parts.lastName(), displayName, email));
         }
 
         private static NameParts splitNames(String firstName, String lastName, String displayName, String email) {
@@ -239,6 +262,16 @@ public class OAuth2SocialAuthService {
             return value != null ? String.valueOf(value).trim() : null;
         }
 
+        private static String firstStringValue(Map<String, Object> attributes, String... keys) {
+            for (String key : keys) {
+                String value = stringValue(attributes, key);
+                if (value != null && !value.isBlank()) {
+                    return value;
+                }
+            }
+            return null;
+        }
+
         private static String blankToNull(String value) {
             return value == null || value.isBlank() ? null : value.trim();
         }
@@ -250,6 +283,7 @@ public class OAuth2SocialAuthService {
             return switch (provider) {
                 case GOOGLE -> "google-" + providerUserId + "@users.noreply.google.com";
                 case GITHUB -> "github-" + providerUserId + "@users.noreply.github.com";
+                case JIRA -> "jira-" + providerUserId + "@users.noreply.atlassian.com";
             };
         }
     }

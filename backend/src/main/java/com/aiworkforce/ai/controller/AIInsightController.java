@@ -1,5 +1,6 @@
 package com.aiworkforce.ai.controller;
 
+import com.aiworkforce.ai.dto.AiRuntimeStatusResponse;
 import com.aiworkforce.ai.entity.AIInsight;
 import com.aiworkforce.ai.service.AIInsightService;
 import com.aiworkforce.core.response.ApiResponse;
@@ -17,6 +18,12 @@ import java.util.UUID;
 public class AIInsightController {
 
     private final AIInsightService aiInsightService;
+
+    @GetMapping("/runtime-status")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
+    public ResponseEntity<ApiResponse<AiRuntimeStatusResponse>> getRuntimeStatus() {
+        return ResponseEntity.ok(ApiResponse.success(aiInsightService.getRuntimeStatus()));
+    }
 
     @PostMapping("/generate/{employeeId}")
     @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")

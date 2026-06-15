@@ -8,6 +8,7 @@ public interface AccountRepository extends JpaRepository<Account, UUID> {
     Optional<Account> findByEmail(String email);
     Optional<Account> findByGoogleId(String googleId);
     Optional<Account> findByGithubId(String githubId);
+    Optional<Account> findByJiraId(String jiraId);
     boolean existsByEmail(String email);
     long countByActive(boolean active);
 }

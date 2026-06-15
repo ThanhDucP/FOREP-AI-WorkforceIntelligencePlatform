@@ -1,6 +1,7 @@
 package com.aiworkforce.integration.dto;
 
 import com.aiworkforce.core.enums.IntegrationProvider;
+import com.aiworkforce.core.enums.IntegrationSyncStatus;
 import lombok.Builder;
 import lombok.Data;
 
@@ -17,6 +18,9 @@ public class TaskIntegrationConfigResponse {
     private IntegrationProvider provider;
     private Boolean isActive;
     private String projectKey;
+    private LocalDateTime lastSyncAt;
+    private IntegrationSyncStatus lastSyncStatus;
+    private String lastSyncError;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
     

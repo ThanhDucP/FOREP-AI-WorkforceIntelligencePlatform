@@ -1,6 +1,8 @@
 package com.aiworkforce.ai.service;
 
 import com.aiworkforce.ai.client.GeminiClient;
+import com.aiworkforce.ai.config.AiProperties;
+import com.aiworkforce.ai.dto.AiRuntimeStatusResponse;
 import com.aiworkforce.ai.entity.AIInsight;
 import com.aiworkforce.ai.prompt.PromptBuilder;
 import com.aiworkforce.ai.repository.AIInsightRepository;
@@ -49,7 +51,9 @@ public class AIInsightService {
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
     private final GeminiClient geminiClient;
+    private final AiProperties aiProperties;
     private final PromptBuilder promptBuilder;
+    private final RagContextService ragContextService;
     private final DashboardAnalyticsService analyticsService;
     private final EmployeeRepository employeeRepository;
     private final TeamRepository teamRepository;
@@ -75,8 +79,9 @@ public class AIInsightService {
         DashboardResponse analytics = analyticsService.getEmployeeDashboard(employeeId);
 
         // Xây dựng prompt từ dữ liệu thật
+        String ragContext = ragContextService.buildEmployeeContext(employee);
         String prompt = promptBuilder.buildBurnoutPrompt(
-                employee.getFirstName() + " " + employee.getLastName(), analytics);
+                employee.getFirstName() + " " + employee.getLastName(), analytics, ragContext);
 
         // Gọi AI - sẽ throw AiServiceException nếu lỗi kết nối/prompt
         String aiResponse;
@@ -105,6 +110,18 @@ public class AIInsightService {
         insight.setConfidenceScore(resolveConfidenceScore(insight.getSeverity(), normalizedInsight));
 
         return insightRepository.save(insight);
+    }
+
+    public AiRuntimeStatusResponse getRuntimeStatus() {
+        return AiRuntimeStatusResponse.builder()
+                .provider("Gemini via LangChain4j")
+                .model(aiProperties.getGemini().getModel())
+                .apiKeyConfigured(aiProperties.getGemini().getApiKey() != null && !aiProperties.getGemini().getApiKey().isBlank())
+                .ragEnabled(aiProperties.getRag().isEnabled())
+                .ragMaxContextCharacters(aiProperties.getRag().getMaxContextCharacters())
+                .ragMaxTasks(aiProperties.getRag().getMaxTasks())
+                .ragMaxPreviousInsights(aiProperties.getRag().getMaxPreviousInsights())
+                .build();
     }
 
     private String cleanJsonResponse(String response) {

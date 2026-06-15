@@ -13,6 +13,7 @@ public class TaskRequest {
     private int estimatedHours;
     private UUID assigneeId;
     private UUID reporterId;
+    private UUID projectId;
     private UUID teamId;
     private UUID sprintId;
     private String externalTicketRef;

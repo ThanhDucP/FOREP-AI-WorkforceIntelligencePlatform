@@ -1,6 +1,8 @@
 package com.aiworkforce.integration.controller;
 
 import com.aiworkforce.core.response.ApiResponse;
+import com.aiworkforce.integration.dto.IntegrationRuntimeStatusResponse;
+import com.aiworkforce.integration.dto.IntegrationSyncLogResponse;
 import com.aiworkforce.integration.dto.TaskIntegrationConfigRequest;
 import com.aiworkforce.integration.dto.TaskIntegrationConfigResponse;
 import com.aiworkforce.integration.service.TaskIntegrationService;
@@ -44,6 +46,12 @@ public class TaskIntegrationController {
         return ResponseEntity.ok(ApiResponse.success(integrationService.getConfigsByTeam(teamId)));
     }
 
+    @GetMapping("/runtime-status")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
+    public ResponseEntity<ApiResponse<IntegrationRuntimeStatusResponse>> getRuntimeStatus() {
+        return ResponseEntity.ok(ApiResponse.success(integrationService.getRuntimeStatus()));
+    }
+
     @PutMapping("/{id}")
     @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
     public ResponseEntity<ApiResponse<TaskIntegrationConfigResponse>> updateConfig(
@@ -64,5 +72,11 @@ public class TaskIntegrationController {
     public ResponseEntity<ApiResponse<String>> syncTasks(@PathVariable UUID id) {
         integrationService.syncTasks(id);
         return ResponseEntity.ok(ApiResponse.success("Sync completed successfully"));
+    }
+
+    @GetMapping("/{id}/sync-logs")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'EMPLOYEE')")
+    public ResponseEntity<ApiResponse<List<IntegrationSyncLogResponse>>> getSyncLogs(@PathVariable UUID id) {
+        return ResponseEntity.ok(ApiResponse.success(integrationService.getSyncLogs(id)));
     }
 }

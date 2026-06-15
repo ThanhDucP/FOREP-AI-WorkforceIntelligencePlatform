@@ -49,6 +49,12 @@ public class TaskController {
         return ResponseEntity.ok(ApiResponse.success(taskService.getTasksByTeam(teamId)));
     }
 
+    @GetMapping("/project/{projectId}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
+    public ResponseEntity<ApiResponse<List<Task>>> getTasksByProject(@PathVariable UUID projectId) {
+        return ResponseEntity.ok(ApiResponse.success(taskService.getTasksByProject(projectId)));
+    }
+
     @GetMapping("/organization/{organizationId}")
     @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
     public ResponseEntity<ApiResponse<List<Task>>> getTasksByOrganization(@PathVariable UUID organizationId) {

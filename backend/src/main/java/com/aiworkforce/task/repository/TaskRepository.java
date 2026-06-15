@@ -10,6 +10,7 @@ import java.util.List;
 public interface TaskRepository extends JpaRepository<Task, UUID> {
     List<Task> findByAssigneeId(UUID assigneeId);
     List<Task> findByReporterId(UUID reporterId);
+    List<Task> findByProjectId(UUID projectId);
     List<Task> findByTeamId(UUID teamId);
     List<Task> findByTeamIdIn(List<UUID> teamIds);
     List<Task> findByTeamOrganizationId(UUID organizationId);

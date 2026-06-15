@@ -12,4 +12,5 @@ import lombok.NoArgsConstructor;
 public class OAuth2LoginLinksResponse {
     private String google;
     private String github;
+    private String jira;
 }

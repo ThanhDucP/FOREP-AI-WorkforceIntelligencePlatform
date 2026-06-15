@@ -16,6 +16,10 @@ server:
 
 # Application Configurations for Platform
 app:
+  seed-demo-data: ${APP_SEED_DEMO_DATA:false}
+  database:
+    reset-on-start: ${APP_DATABASE_RESET_ON_START:false}
+    reset-schema: ${APP_DATABASE_RESET_SCHEMA:public}
   security:
     jwt:
       secret-key: ${JWT_SECRET_KEY:404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970}
@@ -31,6 +35,18 @@ ai:
     api-key: ${GEMINI_API_KEY:}
     model: ${GEMINI_MODEL:gemini-1.5-flash}
     timeout-seconds: ${GEMINI_TIMEOUT_SECONDS:30}
+  rag:
+    enabled: ${AI_RAG_ENABLED:true}
+    max-context-characters: ${AI_RAG_MAX_CONTEXT_CHARACTERS:4000}
+    max-tasks: ${AI_RAG_MAX_TASKS:12}
+    max-previous-insights: ${AI_RAG_MAX_PREVIOUS_INSIGHTS:3}
+
+integration:
+  sync:
+    enabled: ${INTEGRATION_SYNC_ENABLED:true}
+    cron: ${INTEGRATION_SYNC_CRON:0 */15 * * * *}
+    success-interval-minutes: ${INTEGRATION_SYNC_SUCCESS_INTERVAL_MINUTES:30}
+    failure-retry-delay-minutes: ${INTEGRATION_SYNC_FAILURE_RETRY_DELAY_MINUTES:10}
 
 ---
 spring:
@@ -71,6 +87,33 @@ spring:
         provider:
           github:
             user-name-attribute: id
+app:
+  security:
+    oauth2:
+      enabled: true
+
+---
+spring:
+  config:
+    activate:
+      on-profile: oauth2-jira
+  security:
+    oauth2:
+      client:
+        registration:
+          jira:
+            client-id: ${JIRA_CLIENT_ID}
+            client-secret: ${JIRA_CLIENT_SECRET}
+            authorization-grant-type: authorization_code
+            redirect-uri: "{baseUrl}/login/oauth2/code/{registrationId}"
+            scope:
+              - read:me
+        provider:
+          jira:
+            authorization-uri: https://auth.atlassian.com/authorize
+            token-uri: https://auth.atlassian.com/oauth/token
+            user-info-uri: https://api.atlassian.com/me
+            user-name-attribute: account_id
 app:
   security:
     oauth2:

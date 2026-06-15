@@ -20,6 +20,9 @@ public class Account extends AuditableEntity {
 
     @Column(name = "github_id", unique = true)
     private String githubId;
+
+    @Column(name = "jira_id", unique = true)
+    private String jiraId;
     
     private boolean active = true;
     private boolean locked = false;

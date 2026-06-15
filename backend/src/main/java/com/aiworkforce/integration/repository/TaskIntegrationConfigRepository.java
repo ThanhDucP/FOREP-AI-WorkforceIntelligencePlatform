@@ -11,5 +11,6 @@ import java.util.UUID;
 @Repository
 public interface TaskIntegrationConfigRepository extends JpaRepository<TaskIntegrationConfig, UUID> {
     List<TaskIntegrationConfig> findByTeamId(UUID teamId);
+    List<TaskIntegrationConfig> findByIsActiveTrue();
     Optional<TaskIntegrationConfig> findByIdAndIsActiveTrue(UUID id);
 }

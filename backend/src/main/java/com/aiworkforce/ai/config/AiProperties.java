@@ -13,11 +13,20 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 public class AiProperties {
 
     private Gemini gemini = new Gemini();
+    private Rag rag = new Rag();
 
     @Data
     public static class Gemini {
         private String apiKey = "";
         private String model = "gemini-1.5-flash";
         private int timeoutSeconds = 30;
+    }
+
+    @Data
+    public static class Rag {
+        private boolean enabled = true;
+        private int maxContextCharacters = 4000;
+        private int maxTasks = 12;
+        private int maxPreviousInsights = 3;
     }
 }
