@@ -70,8 +70,10 @@ public class JiraWebhookProcessor implements WebhookProcessorStrategy {
                 }
             }
 
-            Optional<Task> existingTaskOpt = taskRepository.findByExternalTicketRefAndSourceProvider(
-                    issueKey, IntegrationProvider.JIRA);
+            Optional<Task> existingTaskOpt = config.getProject() != null
+                    ? taskRepository.findByExternalTicketRefAndSourceProviderAndProjectId(
+                            issueKey, IntegrationProvider.JIRA, config.getProject().getId())
+                    : taskRepository.findByExternalTicketRefAndSourceProvider(issueKey, IntegrationProvider.JIRA);
 
             Task task;
             if (existingTaskOpt.isPresent()) {
@@ -82,6 +84,7 @@ public class JiraWebhookProcessor implements WebhookProcessorStrategy {
                 task.setExternalTicketRef(issueKey);
                 task.setSourceProvider(IntegrationProvider.JIRA);
                 task.setTeam(config.getTeam());
+                task.setProject(config.getProject());
                 log.info("Creating new Jira task: {}", issueKey);
             }
 
@@ -89,6 +92,8 @@ public class JiraWebhookProcessor implements WebhookProcessorStrategy {
             task.setDescription(description);
             task.setExternalUrl(externalUrl);
             task.setAssignee(assignee);
+            task.setTeam(config.getTeam());
+            task.setProject(config.getProject());
             task.setPriority(mapPriority(fields.path("priority").path("name").asText()));
             task.setDueDate(parseDueDate(fields.path("duedate").asText(null)));
             task.setEstimatedHours(estimateHours(fields));

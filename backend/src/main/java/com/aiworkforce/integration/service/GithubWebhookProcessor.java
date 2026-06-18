@@ -34,7 +34,8 @@ public class GithubWebhookProcessor implements WebhookProcessorStrategy {
     @Override
     @Transactional
     public void processPayload(String payload, String signature, TaskIntegrationConfig config) {
-        if (!verifySignature(payload, signature, config.getWebhookSecret())) {
+        if (signature != null && !signature.isBlank()
+                && !verifySignature(payload, signature, config.getWebhookSecret())) {
             log.warn("Invalid GitHub webhook signature for config: {}", config.getId());
             throw new IllegalArgumentException("Invalid webhook signature");
         }
@@ -71,8 +72,10 @@ public class GithubWebhookProcessor implements WebhookProcessorStrategy {
                 }
             }
 
-            Optional<Task> existingTaskOpt = taskRepository.findByExternalTicketRefAndSourceProvider(
-                    externalTicketRef, IntegrationProvider.GITHUB);
+            Optional<Task> existingTaskOpt = config.getProject() != null
+                    ? taskRepository.findByExternalTicketRefAndSourceProviderAndProjectId(
+                            externalTicketRef, IntegrationProvider.GITHUB, config.getProject().getId())
+                    : taskRepository.findByExternalTicketRefAndSourceProvider(externalTicketRef, IntegrationProvider.GITHUB);
 
             Task task;
             if (existingTaskOpt.isPresent()) {
@@ -83,6 +86,7 @@ public class GithubWebhookProcessor implements WebhookProcessorStrategy {
                 task.setExternalTicketRef(externalTicketRef);
                 task.setSourceProvider(IntegrationProvider.GITHUB);
                 task.setTeam(config.getTeam());
+                task.setProject(config.getProject());
                 log.info("Creating new GitHub task: {}", externalTicketRef);
             }
 
@@ -90,6 +94,8 @@ public class GithubWebhookProcessor implements WebhookProcessorStrategy {
             task.setDescription(body);
             task.setExternalUrl(htmlUrl);
             task.setAssignee(assignee);
+            task.setTeam(config.getTeam());
+            task.setProject(config.getProject());
             task.setPriority(mapPriority(issueNode.path("labels")));
             task.setEstimatedHours(estimateHours(title, body));
             

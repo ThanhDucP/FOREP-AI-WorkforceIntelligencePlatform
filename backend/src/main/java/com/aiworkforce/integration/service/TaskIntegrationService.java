@@ -265,6 +265,8 @@ public class TaskIntegrationService {
     }
 
     private void syncConfig(TaskIntegrationConfig config) {
+        config = ensureProjectResolved(config);
+
         IntegrationSyncLog syncLog = new IntegrationSyncLog();
         syncLog.setConfig(config);
         syncLog.setProvider(config.getProvider());
@@ -328,6 +330,25 @@ public class TaskIntegrationService {
                 ? config.getLastSyncAt().plusMinutes(scheduledFailureRetryDelayMinutes)
                 : config.getLastSyncAt().plusMinutes(scheduledSuccessIntervalMinutes);
         return !LocalDateTime.now().isBefore(nextRunAt);
+    }
+
+    private TaskIntegrationConfig ensureProjectResolved(TaskIntegrationConfig config) {
+        if (config.getProject() != null) {
+            return config;
+        }
+
+        String projectKey = config.getProjectKey();
+        String jiraDomain = null;
+        String providerProjectKey = projectKey;
+        if (config.getProvider() == IntegrationProvider.JIRA && projectKey != null && projectKey.contains("/")) {
+            int slashIndex = projectKey.indexOf("/");
+            jiraDomain = projectKey.substring(0, slashIndex);
+            providerProjectKey = projectKey.substring(slashIndex + 1);
+        }
+
+        Project project = resolveProject(null, config.getTeam(), providerProjectKey, jiraDomain, config.getProvider());
+        config.setProject(project);
+        return configRepository.save(config);
     }
 
     private Project resolveProject(UUID projectId, Team team, String providerProjectKey, String jiraDomain, IntegrationProvider provider) {

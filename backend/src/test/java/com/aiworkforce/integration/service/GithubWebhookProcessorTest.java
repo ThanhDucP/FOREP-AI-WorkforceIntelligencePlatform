@@ -2,6 +2,8 @@ package com.aiworkforce.integration.service;
 
 import com.aiworkforce.core.enums.IntegrationProvider;
 import com.aiworkforce.identity.entity.Employee;
+import com.aiworkforce.identity.entity.Project;
+import com.aiworkforce.identity.entity.Team;
 import com.aiworkforce.identity.repository.EmployeeRepository;
 import com.aiworkforce.integration.entity.TaskIntegrationConfig;
 import com.aiworkforce.task.entity.Task;
@@ -20,6 +22,7 @@ import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import java.nio.charset.StandardCharsets;
 import java.util.Optional;
+import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
@@ -42,6 +45,8 @@ public class GithubWebhookProcessorTest {
 
     private TaskIntegrationConfig config;
     private final String secret = "my-secret";
+    private Project project;
+    private Team team;
 
     @BeforeEach
     void setUp() {
@@ -50,6 +55,13 @@ public class GithubWebhookProcessorTest {
         
         config = new TaskIntegrationConfig();
         config.setWebhookSecret(secret);
+        team = new Team();
+        team.setId(UUID.randomUUID());
+        project = new Project();
+        project.setId(UUID.randomUUID());
+        project.setTeam(team);
+        config.setTeam(team);
+        config.setProject(project);
     }
 
     @Test
@@ -77,7 +89,8 @@ public class GithubWebhookProcessorTest {
         // Since test doesn't need to know the inner mapping, we just mock the repository method.
         when(employeeRepository.findByAccountEmail("dev1@example.com")).thenReturn(Optional.of(mockEmployee));
         
-        when(taskRepository.findByExternalTicketRefAndSourceProvider("GH-123", IntegrationProvider.GITHUB))
+        when(taskRepository.findByExternalTicketRefAndSourceProviderAndProjectId(
+                "GH-123", IntegrationProvider.GITHUB, project.getId()))
                 .thenReturn(Optional.empty());
 
         processor.processPayload(payload, signature, config);
@@ -92,6 +105,37 @@ public class GithubWebhookProcessorTest {
         assertEquals("https://github.com/org/repo/issues/123", savedTask.getExternalUrl());
         assertEquals(IntegrationProvider.GITHUB, savedTask.getSourceProvider());
         assertEquals(mockEmployee, savedTask.getAssignee());
+        assertEquals(team, savedTask.getTeam());
+        assertEquals(project, savedTask.getProject());
+    }
+
+    @Test
+    void testProcessPayload_MissingSignature_CreatesNewTaskForAuthenticatedApiCall() {
+        String payload = """
+                {
+                  "action": "opened",
+                  "issue": {
+                    "number": 456,
+                    "title": "Import from Swagger",
+                    "body": "No GitHub signature header",
+                    "html_url": "https://github.com/org/repo/issues/456",
+                    "state": "open"
+                  }
+                }
+                """;
+
+        when(taskRepository.findByExternalTicketRefAndSourceProviderAndProjectId(
+                "GH-456", IntegrationProvider.GITHUB, project.getId()))
+                .thenReturn(Optional.empty());
+
+        processor.processPayload(payload, null, config);
+
+        ArgumentCaptor<Task> taskCaptor = ArgumentCaptor.forClass(Task.class);
+        verify(taskRepository).save(taskCaptor.capture());
+
+        Task savedTask = taskCaptor.getValue();
+        assertEquals("GH-456", savedTask.getExternalTicketRef());
+        assertEquals(project, savedTask.getProject());
     }
 
     @Test
