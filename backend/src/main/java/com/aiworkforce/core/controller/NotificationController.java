@@ -7,6 +7,7 @@ import com.aiworkforce.identity.entity.Employee;
 import com.aiworkforce.identity.service.EmployeeService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -16,6 +17,12 @@ import java.util.UUID;
 @RequestMapping("/api/v1/notifications")
 @RequiredArgsConstructor
 public class NotificationController {
+
+    @GetMapping("/admin/all")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<ApiResponse<List<NotificationResponse>>> getAllNotifications() {
+        return ResponseEntity.ok(ApiResponse.success(notificationService.getAllNotifications()));
+    }
 
     private final NotificationService notificationService;
     private final EmployeeService employeeService;

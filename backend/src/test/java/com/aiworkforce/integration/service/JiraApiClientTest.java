@@ -6,6 +6,9 @@ import com.aiworkforce.identity.entity.Team;
 import com.aiworkforce.identity.repository.EmployeeRepository;
 import com.aiworkforce.identity.service.TeamMembershipService;
 import com.aiworkforce.integration.entity.TaskIntegrationConfig;
+import com.aiworkforce.integration.repository.JiraIssueSnapshotRepository;
+import com.aiworkforce.integration.repository.JiraProjectSnapshotRepository;
+import com.aiworkforce.integration.repository.JiraSprintSnapshotRepository;
 import com.aiworkforce.task.entity.Task;
 import com.aiworkforce.task.repository.TaskRepository;
 import com.aiworkforce.task.service.TaskAssessmentService;
@@ -44,6 +47,15 @@ public class JiraApiClientTest {
     @Mock
     private TeamMembershipService membershipService;
 
+    @Mock
+    private JiraProjectSnapshotRepository projectSnapshotRepository;
+
+    @Mock
+    private JiraSprintSnapshotRepository sprintSnapshotRepository;
+
+    @Mock
+    private JiraIssueSnapshotRepository issueSnapshotRepository;
+
     private ObjectMapper objectMapper;
     private JiraApiClient jiraApiClient;
     private HttpServer server;
@@ -52,7 +64,7 @@ public class JiraApiClientTest {
     @BeforeEach
     void setUp() {
         objectMapper = new ObjectMapper();
-        jiraApiClient = new JiraApiClient(taskRepository, employeeRepository, objectMapper, new TaskAssessmentService(), membershipService);
+        jiraApiClient = new JiraApiClient(taskRepository, employeeRepository, objectMapper, new TaskAssessmentService(), membershipService, projectSnapshotRepository, sprintSnapshotRepository, issueSnapshotRepository);
     }
 
     @AfterEach
@@ -129,3 +141,4 @@ public class JiraApiClientTest {
         server.start();
     }
 }
+

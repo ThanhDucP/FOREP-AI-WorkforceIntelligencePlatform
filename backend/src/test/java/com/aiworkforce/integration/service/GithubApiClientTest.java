@@ -6,6 +6,10 @@ import com.aiworkforce.identity.entity.Team;
 import com.aiworkforce.identity.repository.EmployeeRepository;
 import com.aiworkforce.identity.service.TeamMembershipService;
 import com.aiworkforce.integration.entity.TaskIntegrationConfig;
+import com.aiworkforce.integration.repository.GithubCommitRepository;
+import com.aiworkforce.integration.repository.GithubContributorRepository;
+import com.aiworkforce.integration.repository.GithubPullRequestRepository;
+import com.aiworkforce.integration.repository.GithubRepositorySnapshotRepository;
 import com.aiworkforce.task.entity.Task;
 import com.aiworkforce.task.repository.TaskRepository;
 import com.aiworkforce.task.service.TaskAssessmentService;
@@ -42,6 +46,18 @@ public class GithubApiClientTest {
     @Mock
     private TeamMembershipService membershipService;
 
+    @Mock
+    private GithubRepositorySnapshotRepository repositorySnapshotRepository;
+
+    @Mock
+    private GithubContributorRepository contributorRepository;
+
+    @Mock
+    private GithubPullRequestRepository pullRequestRepository;
+
+    @Mock
+    private GithubCommitRepository commitRepository;
+
     private ObjectMapper objectMapper;
     private GithubApiClient githubApiClient;
     private HttpServer server;
@@ -49,7 +65,7 @@ public class GithubApiClientTest {
     @BeforeEach
     void setUp() {
         objectMapper = new ObjectMapper();
-        githubApiClient = new GithubApiClient(taskRepository, employeeRepository, objectMapper, new TaskAssessmentService(), membershipService);
+        githubApiClient = new GithubApiClient(taskRepository, employeeRepository, objectMapper, new TaskAssessmentService(), membershipService, repositorySnapshotRepository, contributorRepository, pullRequestRepository, commitRepository);
     }
 
     @AfterEach
@@ -114,3 +130,4 @@ public class GithubApiClientTest {
         server.start();
     }
 }
+

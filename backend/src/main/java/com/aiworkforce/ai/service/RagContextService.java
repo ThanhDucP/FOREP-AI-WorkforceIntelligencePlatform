@@ -7,6 +7,16 @@ import com.aiworkforce.identity.entity.Employee;
 import com.aiworkforce.identity.entity.Project;
 import com.aiworkforce.identity.entity.Team;
 import com.aiworkforce.identity.repository.ProjectRepository;
+import com.aiworkforce.integration.entity.GithubCommit;
+import com.aiworkforce.integration.entity.GithubContributor;
+import com.aiworkforce.integration.entity.GithubPullRequest;
+import com.aiworkforce.integration.entity.JiraIssueSnapshot;
+import com.aiworkforce.integration.entity.JiraSprintSnapshot;
+import com.aiworkforce.integration.repository.GithubCommitRepository;
+import com.aiworkforce.integration.repository.GithubContributorRepository;
+import com.aiworkforce.integration.repository.GithubPullRequestRepository;
+import com.aiworkforce.integration.repository.JiraIssueSnapshotRepository;
+import com.aiworkforce.integration.repository.JiraSprintSnapshotRepository;
 import com.aiworkforce.task.entity.Task;
 import com.aiworkforce.task.repository.TaskRepository;
 import lombok.RequiredArgsConstructor;
@@ -23,6 +33,11 @@ public class RagContextService {
     private final ProjectRepository projectRepository;
     private final TaskRepository taskRepository;
     private final AIInsightRepository insightRepository;
+    private final GithubCommitRepository githubCommitRepository;
+    private final GithubContributorRepository githubContributorRepository;
+    private final GithubPullRequestRepository githubPullRequestRepository;
+    private final JiraIssueSnapshotRepository jiraIssueSnapshotRepository;
+    private final JiraSprintSnapshotRepository jiraSprintSnapshotRepository;
 
     public String buildEmployeeContext(Employee employee) {
         if (!aiProperties.getRag().isEnabled()) {
@@ -32,6 +47,8 @@ public class RagContextService {
         StringBuilder context = new StringBuilder();
         appendTeamAndProjects(context, employee.getTeam());
         appendRecentTasks(context, employee);
+        appendJiraIssues(context, employee);
+        appendTeamIntegrationSignals(context, employee.getTeam());
         appendPreviousInsights(context, employee);
         return limit(context.toString(), aiProperties.getRag().getMaxContextCharacters());
     }
@@ -82,7 +99,123 @@ public class RagContextService {
                     .append(" | status: ").append(task.getStatus())
                     .append(" | priority: ").append(task.getPriority())
                     .append(" | project: ").append(task.getProject() != null ? task.getProject().getName() : "none")
+                    .append(" | source: ").append(task.getSourceProvider())
+                    .append(" | external: ").append(valueOrNone(task.getExternalTicketRef()))
+                    .append(" | sprint: ").append(task.getSprintNumber())
                     .append(" | due: ").append(task.getDueDate())
+                    .append("\n");
+        }
+    }
+
+    private void appendJiraIssues(StringBuilder context, Employee employee) {
+        List<JiraIssueSnapshot> issues = jiraIssueSnapshotRepository.findByAssigneeIdOrderByUpdatedAtDesc(employee.getId()).stream()
+                .limit(8)
+                .toList();
+
+        if (issues.isEmpty()) {
+            context.append("- Jira issue signals for employee: none.\n");
+            return;
+        }
+
+        context.append("- Jira issue signals for employee:\n");
+        for (JiraIssueSnapshot issue : issues) {
+            context.append("  + ")
+                    .append(issue.getIssueKey())
+                    .append(" | ").append(limit(valueOrNone(issue.getSummary()), 120))
+                    .append(" | status: ").append(valueOrNone(issue.getStatusName()))
+                    .append(" | priority: ").append(valueOrNone(issue.getPriorityName()))
+                    .append(" | sprint: ").append(valueOrNone(issue.getSprintName()))
+                    .append(" | story points: ").append(issue.getStoryPoints())
+                    .append(" | due: ").append(issue.getDueDate())
+                    .append("\n");
+        }
+    }
+
+    private void appendTeamIntegrationSignals(StringBuilder context, Team team) {
+        if (team == null || team.getId() == null) {
+            return;
+        }
+
+        appendGithubPullRequests(context, team);
+        appendGithubCommits(context, team);
+        appendGithubContributors(context, team);
+        appendJiraSprints(context, team);
+    }
+
+    private void appendGithubPullRequests(StringBuilder context, Team team) {
+        List<GithubPullRequest> pullRequests = githubPullRequestRepository.findByTeamIdOrderByProviderUpdatedAtDesc(team.getId()).stream()
+                .limit(6)
+                .toList();
+        if (pullRequests.isEmpty()) {
+            context.append("- GitHub pull request signals: none.\n");
+            return;
+        }
+        context.append("- GitHub pull request signals:\n");
+        for (GithubPullRequest pr : pullRequests) {
+            context.append("  + ")
+                    .append(pr.getRepositoryFullName()).append("#").append(pr.getNumber())
+                    .append(" | ").append(limit(valueOrNone(pr.getTitle()), 120))
+                    .append(" | state: ").append(valueOrNone(pr.getState()))
+                    .append(" | merged: ").append(pr.getMerged())
+                    .append(" | author: ").append(valueOrNone(pr.getAuthorLogin()))
+                    .append("\n");
+        }
+    }
+
+    private void appendGithubCommits(StringBuilder context, Team team) {
+        List<GithubCommit> commits = githubCommitRepository.findByTeamIdOrderByCommittedAtDesc(team.getId()).stream()
+                .limit(6)
+                .toList();
+        if (commits.isEmpty()) {
+            context.append("- GitHub commit signals: none.\n");
+            return;
+        }
+        context.append("- GitHub commit signals:\n");
+        for (GithubCommit commit : commits) {
+            context.append("  + ")
+                    .append(commit.getRepositoryFullName())
+                    .append(" | ").append(shortSha(commit.getSha()))
+                    .append(" | +").append(commit.getAdditions())
+                    .append(" -").append(commit.getDeletions())
+                    .append(" files: ").append(commit.getChangedFiles())
+                    .append(" | ").append(limit(valueOrNone(commit.getMessage()), 120))
+                    .append("\n");
+        }
+    }
+
+    private void appendGithubContributors(StringBuilder context, Team team) {
+        List<GithubContributor> contributors = githubContributorRepository.findByTeamIdOrderByContributionsDesc(team.getId()).stream()
+                .limit(5)
+                .toList();
+        if (contributors.isEmpty()) {
+            context.append("- GitHub contributor signals: none.\n");
+            return;
+        }
+        context.append("- GitHub contributor signals:\n");
+        for (GithubContributor contributor : contributors) {
+            context.append("  + ")
+                    .append(contributor.getLogin())
+                    .append(" | repo: ").append(contributor.getRepositoryFullName())
+                    .append(" | contributions: ").append(contributor.getContributions())
+                    .append("\n");
+        }
+    }
+
+    private void appendJiraSprints(StringBuilder context, Team team) {
+        List<JiraSprintSnapshot> sprints = jiraSprintSnapshotRepository.findByTeamIdOrderByEndDateDesc(team.getId()).stream()
+                .limit(5)
+                .toList();
+        if (sprints.isEmpty()) {
+            context.append("- Jira sprint signals: none.\n");
+            return;
+        }
+        context.append("- Jira sprint signals:\n");
+        for (JiraSprintSnapshot sprint : sprints) {
+            context.append("  + ")
+                    .append(valueOrNone(sprint.getName()))
+                    .append(" | state: ").append(valueOrNone(sprint.getState()))
+                    .append(" | board: ").append(sprint.getBoardId())
+                    .append(" | end: ").append(sprint.getEndDate())
                     .append("\n");
         }
     }
@@ -116,5 +249,12 @@ public class RagContextService {
 
     private String valueOrNone(String value) {
         return value == null || value.isBlank() ? "none" : value;
+    }
+
+    private String shortSha(String sha) {
+        if (sha == null || sha.length() <= 8) {
+            return valueOrNone(sha);
+        }
+        return sha.substring(0, 8);
     }
 }

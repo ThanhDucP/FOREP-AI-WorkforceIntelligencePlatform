@@ -68,14 +68,21 @@ public class TaskIntegrationController {
     }
 
     @PostMapping("/{id}/sync")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'EMPLOYEE')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
     public ResponseEntity<ApiResponse<String>> syncTasks(@PathVariable UUID id) {
         integrationService.syncTasks(id);
         return ResponseEntity.ok(ApiResponse.success("Sync completed successfully"));
     }
 
+    @PostMapping("/sync")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<ApiResponse<String>> syncAllActiveConfigs() {
+        integrationService.syncAllActiveConfigs();
+        return ResponseEntity.ok(ApiResponse.success("All active integrations synced successfully"));
+    }
+
     @GetMapping("/{id}/sync-logs")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'EMPLOYEE')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
     public ResponseEntity<ApiResponse<List<IntegrationSyncLogResponse>>> getSyncLogs(@PathVariable UUID id) {
         return ResponseEntity.ok(ApiResponse.success(integrationService.getSyncLogs(id)));
     }

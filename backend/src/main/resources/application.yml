@@ -31,10 +31,14 @@ app:
       failure-redirect-uri: ${OAUTH2_FAILURE_REDIRECT_URI:http://localhost:3000/login?oauth2=failed}
 
 ai:
+  provider: ${AI_PROVIDER:gemini}
+  model: ${AI_MODEL:gemini-2.5-flash}
   gemini:
     api-key: ${GEMINI_API_KEY:}
-    model: ${GEMINI_MODEL:gemini-1.5-flash}
     timeout-seconds: ${GEMINI_TIMEOUT_SECONDS:30}
+  openai:
+    api-key: ${OPENAI_API_KEY:}
+    timeout-seconds: ${OPENAI_TIMEOUT_SECONDS:30}
   rag:
     enabled: ${AI_RAG_ENABLED:true}
     max-context-characters: ${AI_RAG_MAX_CONTEXT_CHARACTERS:4000}

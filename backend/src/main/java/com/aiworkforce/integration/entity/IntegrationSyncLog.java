@@ -17,7 +17,7 @@ import lombok.Setter;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "integration_sync_log")
+@Table(name = "sync_run_log")
 @Getter
 @Setter
 public class IntegrationSyncLog extends AuditableEntity {
@@ -38,5 +38,9 @@ public class IntegrationSyncLog extends AuditableEntity {
     private LocalDateTime finishedAt;
 
     @Column(columnDefinition = "TEXT")
-    private String message;
+    private String errorMessage;
+
+    private Integer totalFetched = 0;
+    private Integer totalCreated = 0;
+    private Integer totalUpdated = 0;
 }

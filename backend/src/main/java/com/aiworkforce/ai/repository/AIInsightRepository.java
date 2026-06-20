@@ -10,4 +10,6 @@ public interface AIInsightRepository extends JpaRepository<AIInsight, UUID> {
     List<AIInsight> findByEmployeeTeamIdOrderByCreatedAtDesc(UUID teamId);
     List<AIInsight> findByEmployeeTeamIdInOrderByCreatedAtDesc(List<UUID> teamIds);
     List<AIInsight> findByEmployeeTeamOrganizationIdOrderByCreatedAtDesc(UUID organizationId);
+    List<AIInsight> findByProjectIdOrderByCreatedAtDesc(UUID projectId);
+    List<AIInsight> findTop10ByOrderByCreatedAtDesc();
 }

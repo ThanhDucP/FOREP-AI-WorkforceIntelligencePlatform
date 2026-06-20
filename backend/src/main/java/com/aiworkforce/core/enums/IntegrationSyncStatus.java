@@ -1,7 +1,7 @@
 package com.aiworkforce.core.enums;
 
 public enum IntegrationSyncStatus {
-    STARTED,
+    RUNNING,
     SUCCESS,
     FAILED
 }

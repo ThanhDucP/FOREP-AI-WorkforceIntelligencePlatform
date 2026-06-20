@@ -15,10 +15,19 @@ public interface TaskRepository extends JpaRepository<Task, UUID> {
     List<Task> findByTeamIdIn(List<UUID> teamIds);
     List<Task> findByTeamOrganizationId(UUID organizationId);
     List<Task> findBySprintId(UUID sprintId);
+    List<Task> findTop10ByOrderByUpdatedAtDesc();
     List<Task> findByStatus(TaskStatus status);
     List<Task> findByStatusNotAndDueDateBefore(TaskStatus status, LocalDateTime dateTime);
     long countByStatus(TaskStatus status);
+    long countByStatusNotAndDueDateBefore(TaskStatus status, LocalDateTime dateTime);
+    long countByAssigneeIdAndStatus(UUID assigneeId, TaskStatus status);
+    long countByAssigneeIdAndStatusNot(UUID assigneeId, TaskStatus status);
+    long countByAssigneeIdAndStatusNotAndDueDateBefore(UUID assigneeId, TaskStatus status, LocalDateTime dateTime);
+    long countByTeamIdAndStatus(UUID teamId, TaskStatus status);
+    long countByTeamIdAndStatusNot(UUID teamId, TaskStatus status);
+    long countByTeamIdAndStatusNotAndDueDateBefore(UUID teamId, TaskStatus status, LocalDateTime dateTime);
     
     java.util.Optional<Task> findByExternalTicketRefAndSourceProvider(String externalTicketRef, com.aiworkforce.core.enums.IntegrationProvider sourceProvider);
     java.util.Optional<Task> findByExternalTicketRefAndSourceProviderAndProjectId(String externalTicketRef, com.aiworkforce.core.enums.IntegrationProvider sourceProvider, UUID projectId);
 }
+

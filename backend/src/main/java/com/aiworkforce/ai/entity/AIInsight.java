@@ -3,6 +3,7 @@ import com.aiworkforce.core.base.AuditableEntity;
 import com.aiworkforce.core.enums.InsightSeverity;
 import com.aiworkforce.core.enums.InsightType;
 import com.aiworkforce.identity.entity.Employee;
+import com.aiworkforce.identity.entity.Project;
 import com.aiworkforce.identity.entity.Team;
 import jakarta.persistence.*;
 import lombok.Getter;
@@ -44,4 +45,8 @@ public class AIInsight extends AuditableEntity {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "team_id")
     private Team team;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "project_id")
+    private Project project;
 }

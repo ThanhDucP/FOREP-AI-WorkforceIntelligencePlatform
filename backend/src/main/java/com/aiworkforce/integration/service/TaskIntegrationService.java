@@ -6,6 +6,7 @@ import com.aiworkforce.core.exception.BusinessException;
 import com.aiworkforce.core.exception.ResourceNotFoundException;
 import com.aiworkforce.core.security.AccessPolicyService;
 import com.aiworkforce.identity.entity.Project;
+import com.aiworkforce.identity.entity.Employee;
 import com.aiworkforce.identity.entity.Team;
 import com.aiworkforce.identity.repository.ProjectRepository;
 import com.aiworkforce.identity.repository.TeamRepository;
@@ -14,6 +15,7 @@ import com.aiworkforce.integration.dto.IntegrationConnectRequest;
 import com.aiworkforce.integration.dto.IntegrationConnectResponse;
 import com.aiworkforce.integration.dto.IntegrationRuntimeStatusResponse;
 import com.aiworkforce.integration.dto.IntegrationSyncLogResponse;
+import com.aiworkforce.integration.dto.SyncResult;
 import com.aiworkforce.integration.dto.TaskIntegrationConfigResponse;
 import com.aiworkforce.integration.entity.IntegrationSyncLog;
 import com.aiworkforce.integration.entity.TaskIntegrationConfig;
@@ -58,7 +60,7 @@ public class TaskIntegrationService {
     @Transactional
     public void syncTasks(UUID configId) {
         TaskIntegrationConfig config = getActiveConfigById(configId);
-        accessPolicyService.ensureIntegrationAccess(config);
+        accessPolicyService.ensureIntegrationManage(config);
         syncConfig(config);
     }
 
@@ -167,6 +169,17 @@ public class TaskIntegrationService {
                 .toList();
     }
 
+    @Transactional
+    public void syncAllActiveConfigs() {
+        Employee currentEmployee = accessPolicyService.currentEmployee();
+        if (!accessPolicyService.isAdmin(currentEmployee)) {
+            throw new BusinessException("Only admins can trigger all integration syncs");
+        }
+        for (TaskIntegrationConfig config : configRepository.findByIsActiveTrue()) {
+            syncConfig(config);
+        }
+    }
+
     public IntegrationRuntimeStatusResponse getRuntimeStatus() {
         List<TaskIntegrationConfig> activeConfigs = configRepository.findByIsActiveTrue();
         long failedConfigCount = activeConfigs.stream()
@@ -270,16 +283,22 @@ public class TaskIntegrationService {
         IntegrationSyncLog syncLog = new IntegrationSyncLog();
         syncLog.setConfig(config);
         syncLog.setProvider(config.getProvider());
-        syncLog.setStatus(IntegrationSyncStatus.STARTED);
+        syncLog.setStatus(IntegrationSyncStatus.RUNNING);
         syncLog.setStartedAt(LocalDateTime.now());
-        syncLog.setMessage("Sync started");
+        syncLog.setTotalFetched(0);
+        syncLog.setTotalCreated(0);
+        syncLog.setTotalUpdated(0);
         syncLog = syncLogRepository.save(syncLog);
 
         try {
+            SyncResult result;
+            LocalDateTime lastSuccessfulSyncAt = config.getLastSyncStatus() == IntegrationSyncStatus.SUCCESS
+                    ? config.getLastSyncAt()
+                    : null;
             if (config.getProvider() == IntegrationProvider.GITHUB) {
-                githubApiClient.syncIssues(config);
+                result = githubApiClient.syncIssues(config, lastSuccessfulSyncAt);
             } else if (config.getProvider() == IntegrationProvider.JIRA) {
-                jiraApiClient.syncIssues(config);
+                result = jiraApiClient.syncIssues(config, lastSuccessfulSyncAt);
             } else {
                 throw new IllegalArgumentException("Unsupported sync provider: " + config.getProvider());
             }
@@ -287,7 +306,10 @@ public class TaskIntegrationService {
             LocalDateTime finishedAt = LocalDateTime.now();
             syncLog.setStatus(IntegrationSyncStatus.SUCCESS);
             syncLog.setFinishedAt(finishedAt);
-            syncLog.setMessage("Sync completed successfully");
+            syncLog.setErrorMessage(null);
+            syncLog.setTotalFetched(result.getTotalFetched());
+            syncLog.setTotalCreated(result.getTotalCreated());
+            syncLog.setTotalUpdated(result.getTotalUpdated());
             syncLogRepository.save(syncLog);
 
             config.setLastSyncAt(finishedAt);
@@ -298,7 +320,7 @@ public class TaskIntegrationService {
             LocalDateTime finishedAt = LocalDateTime.now();
             syncLog.setStatus(IntegrationSyncStatus.FAILED);
             syncLog.setFinishedAt(finishedAt);
-            syncLog.setMessage(ex.getMessage());
+            syncLog.setErrorMessage(ex.getMessage());
             syncLogRepository.save(syncLog);
 
             config.setLastSyncAt(finishedAt);
@@ -317,7 +339,10 @@ public class TaskIntegrationService {
                 .status(syncLog.getStatus())
                 .startedAt(syncLog.getStartedAt())
                 .finishedAt(syncLog.getFinishedAt())
-                .message(syncLog.getMessage())
+                 .errorMessage(syncLog.getErrorMessage())
+                .totalFetched(syncLog.getTotalFetched() != null ? syncLog.getTotalFetched() : 0)
+                .totalCreated(syncLog.getTotalCreated() != null ? syncLog.getTotalCreated() : 0)
+                .totalUpdated(syncLog.getTotalUpdated() != null ? syncLog.getTotalUpdated() : 0)
                 .build();
     }
 

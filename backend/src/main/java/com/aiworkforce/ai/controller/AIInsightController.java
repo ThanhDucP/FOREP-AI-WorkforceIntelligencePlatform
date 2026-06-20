@@ -54,6 +54,12 @@ public class AIInsightController {
         return ResponseEntity.ok(ApiResponse.success(aiInsightService.getInsightsForManagedTeams()));
     }
 
+    @GetMapping("/insights/project/{projectId}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
+    public ResponseEntity<ApiResponse<List<AIInsight>>> getProjectInsights(@PathVariable UUID projectId) {
+        return ResponseEntity.ok(ApiResponse.success(aiInsightService.getInsightsForProject(projectId)));
+    }
+
     @GetMapping("/insights/organization/{organizationId}")
     @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
     public ResponseEntity<ApiResponse<List<AIInsight>>> getOrganizationInsights(@PathVariable UUID organizationId) {

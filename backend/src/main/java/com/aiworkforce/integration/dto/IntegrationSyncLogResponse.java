@@ -17,5 +17,8 @@ public class IntegrationSyncLogResponse {
     private IntegrationSyncStatus status;
     private LocalDateTime startedAt;
     private LocalDateTime finishedAt;
-    private String message;
+    private String errorMessage;
+    private int totalFetched;
+    private int totalCreated;
+    private int totalUpdated;
 }

@@ -9,35 +9,41 @@ import org.springframework.context.annotation.Configuration;
 
 import java.time.Duration;
 
-/**
- * Spring configuration for the LangChain4j Gemini chat model.
- */
 @Configuration
 @EnableConfigurationProperties(AiProperties.class)
 public class AiConfig {
 
-    /**
-     * ChatModel pre-configured for Google Gemini through LangChain4j.
-     * If the key is absent, keep application startup healthy and fail only when AI is called.
-     */
     @Bean
     public ChatModel geminiChatModel(AiProperties props) {
+        if (!"gemini".equalsIgnoreCase(props.getProvider())) {
+            return new ChatModel() {
+                @Override
+                public String chat(String prompt) {
+                    throw new AiServiceException("AI provider '" + props.getProvider() + "' is configured but only Gemini adapter is installed in this build.");
+                }
+            };
+        }
+
         AiProperties.Gemini gemini = props.getGemini();
         if (gemini.getApiKey() == null || gemini.getApiKey().isBlank()) {
             return new ChatModel() {
                 @Override
                 public String chat(String prompt) {
-                    throw new AiServiceException(
-                            "Gemini API key is not configured. Set GEMINI_API_KEY before using AI insight generation."
-                    );
+                    throw new AiServiceException("Gemini API key is not configured. Set ai.gemini.api-key or GEMINI_API_KEY before using AI insight generation.");
                 }
             };
         }
 
         return GoogleAiGeminiChatModel.builder()
                 .apiKey(gemini.getApiKey())
-                .modelName(gemini.getModel())
+                .modelName(resolveModel(props))
                 .timeout(Duration.ofSeconds(gemini.getTimeoutSeconds()))
                 .build();
+    }
+    private String resolveModel(AiProperties props) {
+        if (props.getModel() != null && !props.getModel().isBlank()) {
+            return props.getModel();
+        }
+        return props.getGemini().getModel();
     }
 }

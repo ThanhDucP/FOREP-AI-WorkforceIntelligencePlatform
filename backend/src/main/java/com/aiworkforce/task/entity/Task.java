@@ -38,6 +38,9 @@ public class Task extends AuditableEntity {
     /** External ticket reference e.g. APX-2117, T-220 */
     private String externalTicketRef;
 
+    /** True when an external provider reports that the item was deleted. */
+    private Boolean externalDeleted = false;
+
     /** Sprint number retained for analytics and external Apex AI views */
     private Integer sprintNumber;
 
