@@ -33,19 +33,19 @@ public class OrganizationController {
     }
 
     @PostMapping
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('SYSTEM_ADMIN', 'ADMIN')")
     public ResponseEntity<ApiResponse<OrganizationResponse>> createOrganization(@Valid @RequestBody OrganizationRequest request) {
         return ResponseEntity.ok(ApiResponse.success(organizationService.createOrganization(request)));
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('SYSTEM_ADMIN', 'ADMIN')")
     public ResponseEntity<ApiResponse<OrganizationResponse>> updateOrganization(@PathVariable UUID id, @Valid @RequestBody OrganizationRequest request) {
         return ResponseEntity.ok(ApiResponse.success(organizationService.updateOrganization(id, request)));
     }
 
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('SYSTEM_ADMIN', 'ADMIN')")
     public ResponseEntity<ApiResponse<Void>> deleteOrganization(@PathVariable UUID id) {
         organizationService.deleteOrganization(id);
         return ResponseEntity.ok(ApiResponse.success(null));

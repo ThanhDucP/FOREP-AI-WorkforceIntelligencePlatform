@@ -14,6 +14,7 @@ import lombok.Getter;
 import lombok.Setter;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "jira_issue_snapshot")
@@ -53,10 +54,20 @@ public class JiraIssueSnapshot extends AuditableEntity {
     private String externalUrl;
     private String assigneeAccountId;
     private String assigneeEmail;
+    private String assigneeDisplayName;
+    private String reporterAccountId;
+    private String reporterEmail;
+    private String reporterDisplayName;
     private Integer storyPoints;
     private Integer originalEstimateSeconds;
     private Integer remainingEstimateSeconds;
     private Integer sprintId;
     private String sprintName;
+    private String labels;
+    private String epicKey;
+    private String fixVersions;
+    private String components;
+    private LocalDate providerCreatedAt;
+    private LocalDate providerUpdatedAt;
     private LocalDate dueDate;
 }

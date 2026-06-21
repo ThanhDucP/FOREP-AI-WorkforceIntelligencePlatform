@@ -2,6 +2,7 @@ package com.aiworkforce.auth.service;
 
 import com.aiworkforce.auth.dto.AuthResponse;
 import com.aiworkforce.core.enums.RoleType;
+import com.aiworkforce.core.enums.AccountStatus;
 import com.aiworkforce.core.exception.BusinessException;
 import com.aiworkforce.identity.entity.Account;
 import com.aiworkforce.identity.entity.Employee;
@@ -93,6 +94,7 @@ public class OAuth2SocialAuthService {
         newAccount.setEmail(profile.email() != null ? profile.email() : profile.syntheticEmail());
         newAccount.setPassword(passwordEncoder.encode(UUID.randomUUID().toString()));
         newAccount.setRole(defaultRole);
+        newAccount.setStatus(AccountStatus.ACTIVE);
         newAccount.setActive(true);
         newAccount.setLocked(false);
         return newAccount;

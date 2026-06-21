@@ -14,7 +14,10 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -76,7 +79,14 @@ public class EmployeeService {
     }
 
     public List<EmployeeResponse> getEmployeesByOrganization(UUID organizationId) {
-        return employeeRepository.findByTeamOrganizationId(organizationId).stream()
+        Map<UUID, Employee> employees = new LinkedHashMap<>();
+        for (Employee employee : employeeRepository.findByOrganizationId(organizationId)) {
+            employees.put(employee.getId(), employee);
+        }
+        for (Employee employee : employeeRepository.findByTeamOrganizationId(organizationId)) {
+            employees.put(employee.getId(), employee);
+        }
+        return new ArrayList<>(employees.values()).stream()
                 .map(this::mapToResponse)
                 .collect(Collectors.toList());
     }
@@ -116,6 +126,16 @@ public class EmployeeService {
         employeeRepository.delete(employee);
     }
 
+
+    private UUID resolveOrganizationId(Employee employee) {
+        if (employee.getOrganization() != null) return employee.getOrganization().getId();
+        return employee.getTeam() != null && employee.getTeam().getOrganization() != null ? employee.getTeam().getOrganization().getId() : null;
+    }
+
+    private String resolveOrganizationName(Employee employee) {
+        if (employee.getOrganization() != null) return employee.getOrganization().getName();
+        return employee.getTeam() != null && employee.getTeam().getOrganization() != null ? employee.getTeam().getOrganization().getName() : null;
+    }
     public EmployeeResponse mapToResponse(Employee employee) {
         if (employee == null) return null;
         return EmployeeResponse.builder()
@@ -128,7 +148,10 @@ public class EmployeeService {
             .avatarUrl(employee.getAccount() != null ? employee.getAccount().getAvatarUrl() : null)
                 .teamId(employee.getTeam() != null ? employee.getTeam().getId() : null)
                 .teamName(employee.getTeam() != null ? employee.getTeam().getName() : null)
+                .organizationId(resolveOrganizationId(employee))
+                .organizationName(resolveOrganizationName(employee))
                 .role(employee.getAccount() != null && employee.getAccount().getRole() != null ? employee.getAccount().getRole().getName().name() : null)
+                .accountStatus(employee.getAccount() != null && employee.getAccount().getStatus() != null ? employee.getAccount().getStatus().name() : null)
                 .department(employee.getDepartment())
                 .avatarInitials(employee.getAvatarInitials())
                 .workloadScore(employee.getWorkloadScore())

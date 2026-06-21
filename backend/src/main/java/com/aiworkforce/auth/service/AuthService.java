@@ -8,6 +8,7 @@ import com.aiworkforce.auth.dto.AuthResponse;
 import com.aiworkforce.auth.dto.LoginRequest;
 import com.aiworkforce.auth.dto.RegisterRequest;
 import com.aiworkforce.core.enums.RoleType;
+import com.aiworkforce.core.enums.AccountStatus;
 import com.aiworkforce.core.exception.BusinessException;
 import com.aiworkforce.identity.entity.Employee;
 import com.aiworkforce.identity.repository.EmployeeRepository;
@@ -59,6 +60,7 @@ public class AuthService {
         account.setEmail(request.getEmail());
         account.setPassword(passwordEncoder.encode(request.getPassword()));
         account.setRole(targetRole);
+        account.setStatus(AccountStatus.ACTIVE);
         account.setActive(true);
         account.setLocked(false);
         Account savedAccount = accountRepository.save(account);

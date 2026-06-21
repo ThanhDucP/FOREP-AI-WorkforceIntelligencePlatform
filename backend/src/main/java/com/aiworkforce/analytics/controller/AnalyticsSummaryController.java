@@ -37,13 +37,13 @@ public class AnalyticsSummaryController {
     }
 
     @GetMapping("/summary/users/{employeeId}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER') or @employeeService.getCurrentEmployee().getId().equals(#employeeId)")
+    @PreAuthorize("hasAnyRole('DIRECTOR', 'MANAGER') or @employeeService.getCurrentEmployee().getId().equals(#employeeId)")
     public ResponseEntity<ApiResponse<AnalyticsSummaryResponse>> getEmployeeSummary(@PathVariable UUID employeeId) {
         return ResponseEntity.ok(ApiResponse.success(analyticsSummaryService.getEmployeeSummary(employeeId)));
     }
 
     @GetMapping("/summary/teams/{teamId}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
+    @PreAuthorize("hasAnyRole('DIRECTOR', 'MANAGER')")
     public ResponseEntity<ApiResponse<AnalyticsSummaryResponse>> getTeamSummary(@PathVariable UUID teamId) {
         return ResponseEntity.ok(ApiResponse.success(analyticsSummaryService.getTeamSummary(teamId)));
     }

@@ -41,4 +41,9 @@ public class JiraProjectSnapshot extends AuditableEntity {
     private String leadAccountId;
     private String leadDisplayName;
     private String selfUrl;
+    private Boolean sprintDataAvailable = false;
+    private Boolean storyPointsAvailable = false;
+    private Boolean epicDataAvailable = false;
+    private Boolean versionDataAvailable = false;
+    private Boolean componentDataAvailable = false;
 }

@@ -42,7 +42,7 @@ public class WorkloadAnalyticsController {
     }
 
     @GetMapping("/workload-history/team/{teamId}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
+    @PreAuthorize("hasAnyRole('DIRECTOR', 'MANAGER')")
     public ResponseEntity<ApiResponse<List<WorkloadHistoryResponse>>> getTeamWorkloadHistory(
             @PathVariable UUID teamId,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
@@ -61,7 +61,7 @@ public class WorkloadAnalyticsController {
     }
 
     @GetMapping("/workload-history/organization/{organizationId}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
+    @PreAuthorize("hasAnyRole('DIRECTOR', 'MANAGER')")
     public ResponseEntity<ApiResponse<List<WorkloadHistoryResponse>>> getOrganizationWorkloadHistory(
             @PathVariable UUID organizationId,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,

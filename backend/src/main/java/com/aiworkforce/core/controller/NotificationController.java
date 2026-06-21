@@ -19,7 +19,7 @@ import java.util.UUID;
 public class NotificationController {
 
     @GetMapping("/admin/all")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('SYSTEM_ADMIN', 'ADMIN')")
     public ResponseEntity<ApiResponse<List<NotificationResponse>>> getAllNotifications() {
         return ResponseEntity.ok(ApiResponse.success(notificationService.getAllNotifications()));
     }

@@ -27,13 +27,13 @@ public class LeaveRequestController {
         return ResponseEntity.ok(ApiResponse.success(leaveRequestService.createLeaveRequest(request)));
     }
 
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
+    @PreAuthorize("hasAnyRole('DIRECTOR', 'MANAGER')")
     @PutMapping("/{id}/approve")
     public ResponseEntity<ApiResponse<LeaveRequestResponse>> approveLeaveRequest(@PathVariable UUID id) {
         return ResponseEntity.ok(ApiResponse.success(leaveRequestService.approveLeaveRequest(id)));
     }
 
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
+    @PreAuthorize("hasAnyRole('DIRECTOR', 'MANAGER')")
     @PutMapping("/{id}/reject")
     public ResponseEntity<ApiResponse<LeaveRequestResponse>> rejectLeaveRequest(@PathVariable UUID id) {
         return ResponseEntity.ok(ApiResponse.success(leaveRequestService.rejectLeaveRequest(id)));
@@ -45,13 +45,13 @@ public class LeaveRequestController {
         return ResponseEntity.ok(ApiResponse.success(leaveRequestService.getMyLeaveRequests()));
     }
 
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER') or @employeeService.getCurrentEmployee().getId().equals(#employeeId)")
+    @PreAuthorize("hasAnyRole('DIRECTOR', 'MANAGER') or @employeeService.getCurrentEmployee().getId().equals(#employeeId)")
     @GetMapping("/employee/{employeeId}")
     public ResponseEntity<ApiResponse<List<LeaveRequestResponse>>> getEmployeeLeaveRequests(@PathVariable UUID employeeId) {
         return ResponseEntity.ok(ApiResponse.success(leaveRequestService.getEmployeeLeaveRequests(employeeId)));
     }
 
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
+    @PreAuthorize("hasAnyRole('DIRECTOR', 'MANAGER')")
     @GetMapping("/team/{teamId}")
     public ResponseEntity<ApiResponse<List<LeaveRequestResponse>>> getTeamLeaveRequests(@PathVariable UUID teamId) {
         return ResponseEntity.ok(ApiResponse.success(leaveRequestService.getTeamLeaveRequests(teamId)));
@@ -63,19 +63,19 @@ public class LeaveRequestController {
         return ResponseEntity.ok(ApiResponse.success(leaveRequestService.getManagedTeamLeaveRequests()));
     }
 
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
+    @PreAuthorize("hasAnyRole('DIRECTOR', 'MANAGER')")
     @GetMapping("/organization/{organizationId}")
     public ResponseEntity<ApiResponse<List<LeaveRequestResponse>>> getOrganizationLeaveRequests(@PathVariable UUID organizationId) {
         return ResponseEntity.ok(ApiResponse.success(leaveRequestService.getOrganizationLeaveRequests(organizationId)));
     }
 
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
+    @PreAuthorize("hasAnyRole('DIRECTOR', 'MANAGER')")
     @GetMapping("/status/{status}")
     public ResponseEntity<ApiResponse<List<LeaveRequestResponse>>> getLeaveRequestsByStatus(@PathVariable LeaveStatus status) {
         return ResponseEntity.ok(ApiResponse.success(leaveRequestService.getLeaveRequestsByStatus(status)));
     }
 
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
+    @PreAuthorize("hasAnyRole('DIRECTOR', 'MANAGER')")
     @GetMapping
     public ResponseEntity<ApiResponse<List<LeaveRequestResponse>>> getAllLeaveRequests() {
         return ResponseEntity.ok(ApiResponse.success(leaveRequestService.getAllLeaveRequests()));

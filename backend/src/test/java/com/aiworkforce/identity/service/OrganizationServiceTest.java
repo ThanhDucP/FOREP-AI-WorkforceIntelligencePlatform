@@ -5,12 +5,16 @@ import com.aiworkforce.identity.dto.OrganizationRequest;
 import com.aiworkforce.identity.dto.OrganizationResponse;
 import com.aiworkforce.identity.entity.Organization;
 import com.aiworkforce.identity.repository.OrganizationRepository;
+import com.aiworkforce.identity.repository.AccountRepository;
+import com.aiworkforce.identity.repository.EmployeeRepository;
+import com.aiworkforce.identity.repository.RoleRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.util.Collections;
 import java.util.List;
@@ -27,6 +31,18 @@ public class OrganizationServiceTest {
     @Mock
     private OrganizationRepository organizationRepository;
 
+    @Mock
+    private AccountRepository accountRepository;
+
+    @Mock
+    private EmployeeRepository employeeRepository;
+
+    @Mock
+    private RoleRepository roleRepository;
+
+    @Mock
+    private PasswordEncoder passwordEncoder;
+
     @InjectMocks
     private OrganizationService organizationService;
 
@@ -41,16 +57,12 @@ public class OrganizationServiceTest {
         organization.setId(orgId);
         organization.setName("FOREP Corp");
         organization.setDomain("forep.local");
-        organization.setLatitude(21.0285);
-        organization.setLongitude(105.8521);
-        organization.setAllowedRadiusMeters(200);
+        organization.setAddress("123 Business Street, Hanoi");
 
         request = new OrganizationRequest();
         request.setName("FOREP Corp Updated");
         request.setDomain("forep.local");
-        request.setLatitude(21.0300);
-        request.setLongitude(105.8500);
-        request.setAllowedRadiusMeters(300);
+        request.setAddress("456 Insight Avenue, Hanoi");
     }
 
     @Test
@@ -103,8 +115,7 @@ public class OrganizationServiceTest {
 
         assertNotNull(response);
         assertEquals("FOREP Corp Updated", response.getName());
-        assertEquals(300, response.getAllowedRadiusMeters());
-        assertEquals(21.0300, response.getLatitude());
+        assertEquals("456 Insight Avenue, Hanoi", response.getAddress());
         verify(organizationRepository, times(1)).save(any(Organization.class));
     }
 

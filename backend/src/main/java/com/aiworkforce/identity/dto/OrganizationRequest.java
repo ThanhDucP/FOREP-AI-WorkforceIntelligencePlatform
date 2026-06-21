@@ -11,11 +11,14 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 public class OrganizationRequest {
-    @NotBlank(message = "Tên tổ chức không được để trống")
+    @NotBlank(message = "Organization name is required")
     private String name;
     private String domain;
     private String logoUrl;
-    private Double latitude;
-    private Double longitude;
-    private Integer allowedRadiusMeters;
+    private String address;
+
+    private String directorFirstName;
+    private String directorLastName;
+    private String directorEmail;
+    private String directorPassword;
 }

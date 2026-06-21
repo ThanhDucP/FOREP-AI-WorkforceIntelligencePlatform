@@ -13,4 +13,9 @@ public interface JiraIssueSnapshotRepository extends JpaRepository<JiraIssueSnap
     Optional<JiraIssueSnapshot> findByConfigIdAndIssueKeyIgnoreCase(UUID configId, String issueKey);
     List<JiraIssueSnapshot> findByAssigneeIdOrderByUpdatedAtDesc(UUID assigneeId);
     List<JiraIssueSnapshot> findByTeamIdOrderByUpdatedAtDesc(UUID teamId);
+    long countByConfigIdAndSprintIdIsNotNull(UUID configId);
+    long countByConfigIdAndStoryPointsIsNotNull(UUID configId);
+    long countByConfigIdAndEpicKeyIsNotNull(UUID configId);
+    long countByConfigIdAndFixVersionsIsNotNull(UUID configId);
+    long countByConfigIdAndComponentsIsNotNull(UUID configId);
 }

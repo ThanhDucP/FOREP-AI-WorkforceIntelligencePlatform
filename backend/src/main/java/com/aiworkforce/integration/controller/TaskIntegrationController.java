@@ -25,14 +25,14 @@ public class TaskIntegrationController {
     private final TaskIntegrationService integrationService;
 
     @PostMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
+    @PreAuthorize("hasAnyRole('DIRECTOR', 'MANAGER')")
     public ResponseEntity<ApiResponse<TaskIntegrationConfigResponse>> createConfig(
             @Valid @RequestBody TaskIntegrationConfigRequest request) {
         return ResponseEntity.ok(ApiResponse.success(integrationService.createConfig(request)));
     }
 
     @PostMapping("/connect")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
+    @PreAuthorize("hasAnyRole('DIRECTOR', 'MANAGER')")
     public ResponseEntity<ApiResponse<IntegrationConnectResponse>> connect(
             @Valid @RequestBody IntegrationConnectRequest request) {
         IntegrationConnectResponse resp = integrationService.connectWithKey(request);
@@ -40,20 +40,20 @@ public class TaskIntegrationController {
     }
 
     @GetMapping("/team/{teamId}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
+    @PreAuthorize("hasAnyRole('DIRECTOR', 'MANAGER')")
     public ResponseEntity<ApiResponse<List<TaskIntegrationConfigResponse>>> getConfigsByTeam(
             @PathVariable UUID teamId) {
         return ResponseEntity.ok(ApiResponse.success(integrationService.getConfigsByTeam(teamId)));
     }
 
     @GetMapping("/runtime-status")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
+    @PreAuthorize("hasAnyRole('DIRECTOR', 'MANAGER')")
     public ResponseEntity<ApiResponse<IntegrationRuntimeStatusResponse>> getRuntimeStatus() {
         return ResponseEntity.ok(ApiResponse.success(integrationService.getRuntimeStatus()));
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
+    @PreAuthorize("hasAnyRole('DIRECTOR', 'MANAGER')")
     public ResponseEntity<ApiResponse<TaskIntegrationConfigResponse>> updateConfig(
             @PathVariable UUID id, 
             @RequestBody TaskIntegrationConfigRequest request) {
@@ -61,28 +61,28 @@ public class TaskIntegrationController {
     }
 
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
+    @PreAuthorize("hasAnyRole('DIRECTOR', 'MANAGER')")
     public ResponseEntity<ApiResponse<Void>> deleteConfig(@PathVariable UUID id) {
         integrationService.deleteConfig(id);
         return ResponseEntity.ok(ApiResponse.success(null));
     }
 
     @PostMapping("/{id}/sync")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
+    @PreAuthorize("hasAnyRole('DIRECTOR', 'MANAGER')")
     public ResponseEntity<ApiResponse<String>> syncTasks(@PathVariable UUID id) {
         integrationService.syncTasks(id);
         return ResponseEntity.ok(ApiResponse.success("Sync completed successfully"));
     }
 
     @PostMapping("/sync")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('DIRECTOR', 'MANAGER')")
     public ResponseEntity<ApiResponse<String>> syncAllActiveConfigs() {
         integrationService.syncAllActiveConfigs();
         return ResponseEntity.ok(ApiResponse.success("All active integrations synced successfully"));
     }
 
     @GetMapping("/{id}/sync-logs")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
+    @PreAuthorize("hasAnyRole('DIRECTOR', 'MANAGER')")
     public ResponseEntity<ApiResponse<List<IntegrationSyncLogResponse>>> getSyncLogs(@PathVariable UUID id) {
         return ResponseEntity.ok(ApiResponse.success(integrationService.getSyncLogs(id)));
     }

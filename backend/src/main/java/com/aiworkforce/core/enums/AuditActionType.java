@@ -1,0 +1,11 @@
+package com.aiworkforce.core.enums;
+
+public enum AuditActionType {
+    CONNECT_INTEGRATION,
+    SYNC_DATA,
+    CONFIRM_IDENTITY_MAPPING,
+    CREATE_MANAGER_ACCOUNT,
+    IMPORT_MANAGER_ACCOUNTS,
+    INVITE_EMPLOYEE,
+    BLOCKED_READ_ONLY_OPERATION
+}

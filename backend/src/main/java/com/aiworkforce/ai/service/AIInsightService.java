@@ -2,6 +2,7 @@ package com.aiworkforce.ai.service;
 
 import com.aiworkforce.ai.client.GeminiClient;
 import com.aiworkforce.ai.config.AiProperties;
+import com.aiworkforce.ai.dto.AIInsightResponse;
 import com.aiworkforce.ai.dto.AiRuntimeStatusResponse;
 import com.aiworkforce.ai.entity.AIInsight;
 import com.aiworkforce.ai.prompt.PromptBuilder;
@@ -78,6 +79,11 @@ public class AIInsightService {
         AIInsight savedInsight = insightRepository.save(insight);
         notifyHighSeverityInsight(savedInsight);
         return savedInsight;
+    }
+
+    @Transactional
+    public AIInsightResponse generateInsightResponseForEmployee(UUID employeeId) {
+        return mapToResponse(generateInsightForEmployee(employeeId));
     }
 
     public AiRuntimeStatusResponse getRuntimeStatus() {
@@ -219,36 +225,80 @@ public class AIInsightService {
         return name.isBlank() ? employee.getId().toString() : name;
     }
 
-    public List<AIInsight> getInsightsForEmployee(UUID employeeId) {
-        return insightRepository.findByEmployeeIdOrderByCreatedAtDesc(employeeId);
+    @Transactional(readOnly = true)
+    public List<AIInsightResponse> getInsightsForEmployee(UUID employeeId) {
+        return insightRepository.findByEmployeeIdOrderByCreatedAtDesc(employeeId).stream()
+                .map(this::mapToResponse)
+                .toList();
     }
 
-    public List<AIInsight> getMyInsights() {
+    @Transactional(readOnly = true)
+    public List<AIInsightResponse> getMyInsights() {
         Employee currentEmployee = employeeService.getCurrentEmployee();
         return getInsightsForEmployee(currentEmployee.getId());
     }
 
-    public List<AIInsight> getInsightsForTeam(UUID teamId) {
-        return insightRepository.findByEmployeeTeamIdOrderByCreatedAtDesc(teamId);
+    @Transactional(readOnly = true)
+    public List<AIInsightResponse> getInsightsForTeam(UUID teamId) {
+        return insightRepository.findByEmployeeTeamIdOrderByCreatedAtDesc(teamId).stream()
+                .map(this::mapToResponse)
+                .toList();
     }
 
-    public List<AIInsight> getInsightsForManagedTeams() {
+    @Transactional(readOnly = true)
+    public List<AIInsightResponse> getInsightsForManagedTeams() {
         Employee currentEmployee = employeeService.getCurrentEmployee();
         List<UUID> teamIds = teamRepository.findByManagerId(currentEmployee.getId()).stream()
                 .map(Team::getId)
                 .toList();
         if (teamIds.isEmpty()) return List.of();
-        return insightRepository.findByEmployeeTeamIdInOrderByCreatedAtDesc(teamIds);
+        return insightRepository.findByEmployeeTeamIdInOrderByCreatedAtDesc(teamIds).stream()
+                .map(this::mapToResponse)
+                .toList();
     }
 
-    public List<AIInsight> getInsightsForOrganization(UUID organizationId) {
-        return insightRepository.findByEmployeeTeamOrganizationIdOrderByCreatedAtDesc(organizationId);
+    @Transactional(readOnly = true)
+    public List<AIInsightResponse> getInsightsForOrganization(UUID organizationId) {
+        return insightRepository.findByEmployeeTeamOrganizationIdOrderByCreatedAtDesc(organizationId).stream()
+                .map(this::mapToResponse)
+                .toList();
     }
 
-    public List<AIInsight> getInsightsForProject(UUID projectId) {
+    @Transactional(readOnly = true)
+    public List<AIInsightResponse> getInsightsForProject(UUID projectId) {
         Project project = projectRepository.findById(projectId)
                 .orElseThrow(() -> new ResourceNotFoundException("Project not found"));
         accessPolicyService.ensureProjectAccess(project);
-        return insightRepository.findByProjectIdOrderByCreatedAtDesc(projectId);
+        return insightRepository.findByProjectIdOrderByCreatedAtDesc(projectId).stream()
+                .map(this::mapToResponse)
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public AIInsightResponse getInsight(UUID insightId) {
+        AIInsight insight = insightRepository.findById(insightId)
+                .orElseThrow(() -> new ResourceNotFoundException("AI insight not found"));
+        return mapToResponse(insight);
+    }
+    private AIInsightResponse mapToResponse(AIInsight insight) {
+        Employee employee = insight.getEmployee();
+        Team team = insight.getTeam();
+        Project project = insight.getProject();
+        return AIInsightResponse.builder()
+                .id(insight.getId())
+                .summary(insight.getSummary())
+                .fullAnalysis(insight.getFullAnalysis())
+                .severity(insight.getSeverity())
+                .insightType(insight.getInsightType())
+                .confidenceScore(insight.getConfidenceScore())
+                .employeeId(employee != null ? employee.getId() : null)
+                .employeeName(employee != null ? fullName(employee) : null)
+                .teamId(team != null ? team.getId() : null)
+                .teamName(team != null ? team.getName() : null)
+                .projectId(project != null ? project.getId() : null)
+                .projectName(project != null ? project.getName() : null)
+                .createdAt(insight.getCreatedAt())
+                .updatedAt(insight.getUpdatedAt())
+                .build();
     }
 }

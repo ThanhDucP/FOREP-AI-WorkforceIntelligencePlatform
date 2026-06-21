@@ -17,9 +17,10 @@ public class OrganizationResponse {
     private String name;
     private String domain;
     private String logoUrl;
-    private Double latitude;
-    private Double longitude;
-    private Integer allowedRadiusMeters;
+    private String address;
+    private UUID directorId;
+    private String directorName;
+    private String directorEmail;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

@@ -2,6 +2,7 @@ package com.aiworkforce.integration.service;
 
 import com.aiworkforce.core.enums.IntegrationProvider;
 import com.aiworkforce.core.enums.TaskStatus;
+import com.aiworkforce.core.service.TokenProtectionService;
 import com.aiworkforce.identity.entity.Team;
 import com.aiworkforce.identity.repository.EmployeeRepository;
 import com.aiworkforce.identity.service.TeamMembershipService;
@@ -56,6 +57,9 @@ public class JiraApiClientTest {
     @Mock
     private JiraIssueSnapshotRepository issueSnapshotRepository;
 
+    @Mock
+    private TokenProtectionService tokenProtectionService;
+
     private ObjectMapper objectMapper;
     private JiraApiClient jiraApiClient;
     private HttpServer server;
@@ -64,7 +68,8 @@ public class JiraApiClientTest {
     @BeforeEach
     void setUp() {
         objectMapper = new ObjectMapper();
-        jiraApiClient = new JiraApiClient(taskRepository, employeeRepository, objectMapper, new TaskAssessmentService(), membershipService, projectSnapshotRepository, sprintSnapshotRepository, issueSnapshotRepository);
+        lenient().when(tokenProtectionService.unprotect(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        jiraApiClient = new JiraApiClient(taskRepository, employeeRepository, objectMapper, new TaskAssessmentService(), membershipService, projectSnapshotRepository, sprintSnapshotRepository, issueSnapshotRepository, tokenProtectionService);
     }
 
     @AfterEach

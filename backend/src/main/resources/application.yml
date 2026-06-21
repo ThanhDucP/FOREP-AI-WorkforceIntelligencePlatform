@@ -29,6 +29,8 @@ app:
       enabled: false
       success-redirect-uri: ${OAUTH2_SUCCESS_REDIRECT_URI:http://localhost:3000/auth/oauth2/callback}
       failure-redirect-uri: ${OAUTH2_FAILURE_REDIRECT_URI:http://localhost:3000/login?oauth2=failed}
+    token-protection:
+      key: ${TOKEN_PROTECTION_KEY:dev-change-me-token-protection-key}
 
 ai:
   provider: ${AI_PROVIDER:gemini}

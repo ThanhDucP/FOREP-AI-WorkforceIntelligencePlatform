@@ -29,13 +29,13 @@ public class BurnoutAnalyticsController {
     }
 
     @GetMapping("/users/{employeeId}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER') or @employeeService.getCurrentEmployee().getId().equals(#employeeId)")
+    @PreAuthorize("hasAnyRole('DIRECTOR', 'MANAGER') or @employeeService.getCurrentEmployee().getId().equals(#employeeId)")
     public ResponseEntity<ApiResponse<BurnoutResponse>> getEmployeeBurnout(@PathVariable UUID employeeId) {
         return ResponseEntity.ok(ApiResponse.success(burnoutAnalyticsService.getEmployeeBurnout(employeeId)));
     }
 
     @GetMapping("/teams/{teamId}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
+    @PreAuthorize("hasAnyRole('DIRECTOR', 'MANAGER')")
     public ResponseEntity<ApiResponse<BurnoutResponse>> getTeamBurnout(@PathVariable UUID teamId) {
         return ResponseEntity.ok(ApiResponse.success(burnoutAnalyticsService.getTeamBurnout(teamId)));
     }

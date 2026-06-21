@@ -5,6 +5,7 @@ import com.aiworkforce.core.response.ApiResponse;
 import com.aiworkforce.task.dto.TaskRequest;
 import com.aiworkforce.task.entity.Task;
 import com.aiworkforce.task.service.TaskService;
+import com.aiworkforce.core.security.ReadOnlyScopeGuard;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -19,15 +20,17 @@ import java.util.UUID;
 public class TaskController {
 
     private final TaskService taskService;
+    private final ReadOnlyScopeGuard readOnlyScopeGuard;
 
     @PostMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
+    @PreAuthorize("hasAnyRole('DIRECTOR', 'MANAGER')")
     public ResponseEntity<ApiResponse<Task>> createTask(@RequestBody TaskRequest request) {
-        return ResponseEntity.ok(ApiResponse.success(taskService.createTask(request)));
+        readOnlyScopeGuard.block("CREATE_TASK", "Task", null);
+        return ResponseEntity.ok(ApiResponse.success(null));
     }
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
+    @PreAuthorize("hasAnyRole('DIRECTOR', 'MANAGER')")
     public ResponseEntity<ApiResponse<List<Task>>> getAllTasks() {
         return ResponseEntity.ok(ApiResponse.success(taskService.getAllTasks()));
     }
@@ -38,25 +41,25 @@ public class TaskController {
     }
 
     @GetMapping("/employee/{employeeId}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER') or @employeeService.getCurrentEmployee().getId().equals(#employeeId)")
+    @PreAuthorize("hasAnyRole('DIRECTOR', 'MANAGER') or @employeeService.getCurrentEmployee().getId().equals(#employeeId)")
     public ResponseEntity<ApiResponse<List<Task>>> getTasksByEmployee(@PathVariable UUID employeeId) {
         return ResponseEntity.ok(ApiResponse.success(taskService.getTasksByEmployee(employeeId)));
     }
 
     @GetMapping("/team/{teamId}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
+    @PreAuthorize("hasAnyRole('DIRECTOR', 'MANAGER')")
     public ResponseEntity<ApiResponse<List<Task>>> getTasksByTeam(@PathVariable UUID teamId) {
         return ResponseEntity.ok(ApiResponse.success(taskService.getTasksByTeam(teamId)));
     }
 
     @GetMapping("/project/{projectId}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
+    @PreAuthorize("hasAnyRole('DIRECTOR', 'MANAGER')")
     public ResponseEntity<ApiResponse<List<Task>>> getTasksByProject(@PathVariable UUID projectId) {
         return ResponseEntity.ok(ApiResponse.success(taskService.getTasksByProject(projectId)));
     }
 
     @GetMapping("/organization/{organizationId}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
+    @PreAuthorize("hasAnyRole('DIRECTOR', 'MANAGER')")
     public ResponseEntity<ApiResponse<List<Task>>> getTasksByOrganization(@PathVariable UUID organizationId) {
         return ResponseEntity.ok(ApiResponse.success(taskService.getTasksByOrganization(organizationId)));
     }
@@ -68,19 +71,19 @@ public class TaskController {
     }
 
     @GetMapping("/reported-by/{reporterId}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER') or @employeeService.getCurrentEmployee().getId().equals(#reporterId)")
+    @PreAuthorize("hasAnyRole('DIRECTOR', 'MANAGER') or @employeeService.getCurrentEmployee().getId().equals(#reporterId)")
     public ResponseEntity<ApiResponse<List<Task>>> getTasksByReporter(@PathVariable UUID reporterId) {
         return ResponseEntity.ok(ApiResponse.success(taskService.getTasksByReporter(reporterId)));
     }
 
     @GetMapping("/sprint/{sprintId}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
+    @PreAuthorize("hasAnyRole('DIRECTOR', 'MANAGER')")
     public ResponseEntity<ApiResponse<List<Task>>> getTasksBySprint(@PathVariable UUID sprintId) {
         return ResponseEntity.ok(ApiResponse.success(taskService.getTasksBySprint(sprintId)));
     }
 
     @GetMapping("/status/{status}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
+    @PreAuthorize("hasAnyRole('DIRECTOR', 'MANAGER')")
     public ResponseEntity<ApiResponse<List<Task>>> getTasksByStatus(@PathVariable TaskStatus status) {
         return ResponseEntity.ok(ApiResponse.success(taskService.getTasksByStatus(status)));
     }
@@ -91,26 +94,28 @@ public class TaskController {
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
+    @PreAuthorize("hasAnyRole('DIRECTOR', 'MANAGER')")
     public ResponseEntity<ApiResponse<Task>> updateTask(@PathVariable UUID id, @RequestBody TaskRequest request) {
-        return ResponseEntity.ok(ApiResponse.success(taskService.updateTask(id, request)));
+        readOnlyScopeGuard.block("UPDATE_TASK", "Task", id);
+        return ResponseEntity.ok(ApiResponse.success(null));
     }
 
     @PatchMapping("/{id}/status")
     public ResponseEntity<ApiResponse<Task>> updateTaskStatus(@PathVariable UUID id, @RequestParam TaskStatus status) {
-        return ResponseEntity.ok(ApiResponse.success(taskService.updateTaskStatus(id, status)));
+        readOnlyScopeGuard.block("UPDATE_TASK_STATUS", "Task", id);
+        return ResponseEntity.ok(ApiResponse.success(null));
     }
 
     @PostMapping("/{id}/assess")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
+    @PreAuthorize("hasAnyRole('DIRECTOR', 'MANAGER')")
     public ResponseEntity<ApiResponse<Task>> assessTask(@PathVariable UUID id) {
         return ResponseEntity.ok(ApiResponse.success(taskService.assessTask(id)));
     }
 
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('DIRECTOR', 'MANAGER')")
     public ResponseEntity<ApiResponse<Void>> deleteTask(@PathVariable UUID id) {
-        taskService.deleteTask(id);
+        readOnlyScopeGuard.block("DELETE_TASK", "Task", id);
         return ResponseEntity.ok(ApiResponse.success(null));
     }
 }

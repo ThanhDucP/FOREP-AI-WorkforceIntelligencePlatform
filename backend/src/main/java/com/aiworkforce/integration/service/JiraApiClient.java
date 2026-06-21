@@ -3,6 +3,7 @@ package com.aiworkforce.integration.service;
 import com.aiworkforce.core.enums.IntegrationProvider;
 import com.aiworkforce.core.enums.TaskPriority;
 import com.aiworkforce.core.enums.TaskStatus;
+import com.aiworkforce.core.service.TokenProtectionService;
 import com.aiworkforce.identity.entity.Employee;
 import com.aiworkforce.identity.repository.EmployeeRepository;
 import com.aiworkforce.identity.service.TeamMembershipService;
@@ -31,7 +32,9 @@ import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
+import java.util.ArrayList;
 import java.util.Base64;
+import java.util.List;
 import java.util.Optional;
 
 @Service
@@ -47,6 +50,7 @@ public class JiraApiClient {
     private final JiraProjectSnapshotRepository projectSnapshotRepository;
     private final JiraSprintSnapshotRepository sprintSnapshotRepository;
     private final JiraIssueSnapshotRepository issueSnapshotRepository;
+    private final TokenProtectionService tokenProtectionService;
 
     // Field for testing
     private String jiraApiUrlOverride = null;
@@ -59,7 +63,7 @@ public class JiraApiClient {
     @Transactional
     public SyncResult syncIssues(TaskIntegrationConfig config, LocalDateTime lastSyncTime) {
         String projectKeyRaw = config.getProjectKey(); // e.g. "domain.atlassian.net/PROJ" or "PROJ"
-        String accessToken = config.getAccessToken();
+        String accessToken = tokenProtectionService.unprotect(config.getAccessToken());
 
         if (projectKeyRaw == null || projectKeyRaw.isBlank()) {
             log.warn("Project key is blank, skipping Jira sync for config: {}", config.getId());
@@ -85,6 +89,7 @@ public class JiraApiClient {
             syncProjectMetadata(webClient, config, projectRef);
             syncProjectSprints(webClient, config, projectRef);
             SyncResult result = syncIssueTasks(webClient, config, projectRef, lastSyncTime);
+            refreshProjectFeatureAvailability(config, projectRef);
 
             log.info("Successfully synced Jira project {} | fetched: {}, created: {}, updated: {}", projectRef.projectKey(), result.getTotalFetched(), result.getTotalCreated(), result.getTotalUpdated());
             return result;
@@ -182,6 +187,11 @@ public class JiraApiClient {
             snapshot.setLeadAccountId(projectNode.path("lead").path("accountId").asText(null));
             snapshot.setLeadDisplayName(projectNode.path("lead").path("displayName").asText(null));
             snapshot.setSelfUrl(projectNode.path("self").asText(null));
+            snapshot.setSprintDataAvailable(false);
+            snapshot.setStoryPointsAvailable(false);
+            snapshot.setEpicDataAvailable(false);
+            snapshot.setVersionDataAvailable(false);
+            snapshot.setComponentDataAvailable(false);
             projectSnapshotRepository.save(snapshot);
         } catch (Exception e) {
             log.warn("Unable to sync Jira project metadata for {}, continuing", projectRef.projectKey());
@@ -252,6 +262,7 @@ public class JiraApiClient {
                 sprint.setCompleteDate(parseJiraDateTime(sprintNode.path("completeDate").asText(null)));
                 sprint.setSelfUrl(sprintNode.path("self").asText(null));
                 sprintSnapshotRepository.save(sprint);
+                markProjectFeatureAvailability(config, projectRef, true, null, null, null, null);
             }
         } catch (Exception e) {
             log.warn("Unable to sync Jira sprints for board {}, continuing", boardId);
@@ -265,6 +276,7 @@ public class JiraApiClient {
                 .findByConfigIdAndIssueKeyIgnoreCase(config.getId(), issueKey)
                 .orElseGet(JiraIssueSnapshot::new);
         JsonNode assigneeNode = fields.path("assignee");
+        JsonNode reporterNode = fields.path("reporter");
         snapshot.setConfig(config);
         snapshot.setProject(config.getProject());
         snapshot.setTeam(config.getTeam());
@@ -280,15 +292,55 @@ public class JiraApiClient {
         snapshot.setExternalUrl(externalUrl);
         snapshot.setAssigneeAccountId(assigneeNode.path("accountId").asText(null));
         snapshot.setAssigneeEmail(assigneeNode.path("emailAddress").asText(null));
+        snapshot.setAssigneeDisplayName(assigneeNode.path("displayName").asText(null));
+        snapshot.setReporterAccountId(reporterNode.path("accountId").asText(null));
+        snapshot.setReporterEmail(reporterNode.path("emailAddress").asText(null));
+        snapshot.setReporterDisplayName(reporterNode.path("displayName").asText(null));
         snapshot.setStoryPoints(extractStoryPoints(fields));
         snapshot.setOriginalEstimateSeconds(fields.path("timeoriginalestimate").asInt(0));
         snapshot.setRemainingEstimateSeconds(fields.path("timeestimate").asInt(0));
         snapshot.setSprintId(sprintRef != null ? sprintRef.id() : null);
         snapshot.setSprintName(sprintRef != null ? sprintRef.name() : null);
+        snapshot.setLabels(joinTextArray(fields.path("labels")));
+        snapshot.setEpicKey(extractEpicKey(fields));
+        snapshot.setFixVersions(joinNamedArray(fields.path("fixVersions")));
+        snapshot.setComponents(joinNamedArray(fields.path("components")));
+        snapshot.setProviderCreatedAt(parseJiraDate(fields.path("created").asText(null)));
+        snapshot.setProviderUpdatedAt(parseJiraDate(fields.path("updated").asText(null)));
         snapshot.setDueDate(parseDueDate(fields.path("duedate").asText(null)));
         issueSnapshotRepository.save(snapshot);
+        markProjectFeatureAvailability(config, projectRef, sprintRef != null, snapshot.getStoryPoints() != null, snapshot.getEpicKey() != null, snapshot.getFixVersions() != null, snapshot.getComponents() != null);
     }
 
+
+    private void refreshProjectFeatureAvailability(TaskIntegrationConfig config, JiraProjectRef projectRef) {
+        markProjectFeatureAvailability(
+                config,
+                projectRef,
+                issueSnapshotRepository.countByConfigIdAndSprintIdIsNotNull(config.getId()) > 0,
+                issueSnapshotRepository.countByConfigIdAndStoryPointsIsNotNull(config.getId()) > 0,
+                issueSnapshotRepository.countByConfigIdAndEpicKeyIsNotNull(config.getId()) > 0,
+                issueSnapshotRepository.countByConfigIdAndFixVersionsIsNotNull(config.getId()) > 0,
+                issueSnapshotRepository.countByConfigIdAndComponentsIsNotNull(config.getId()) > 0
+        );
+    }
+
+    private void markProjectFeatureAvailability(TaskIntegrationConfig config, JiraProjectRef projectRef, Boolean sprint, Boolean storyPoints, Boolean epic, Boolean version, Boolean component) {
+        JiraProjectSnapshot snapshot = projectSnapshotRepository
+                .findByConfigIdAndJiraDomainIgnoreCaseAndProjectKeyIgnoreCase(config.getId(), projectRef.domain(), projectRef.projectKey())
+                .orElseGet(JiraProjectSnapshot::new);
+        snapshot.setConfig(config);
+        snapshot.setProject(config.getProject());
+        snapshot.setTeam(config.getTeam());
+        snapshot.setJiraDomain(projectRef.domain());
+        snapshot.setProjectKey(projectRef.projectKey());
+        if (sprint != null && sprint) snapshot.setSprintDataAvailable(true);
+        if (storyPoints != null && storyPoints) snapshot.setStoryPointsAvailable(true);
+        if (epic != null && epic) snapshot.setEpicDataAvailable(true);
+        if (version != null && version) snapshot.setVersionDataAvailable(true);
+        if (component != null && component) snapshot.setComponentDataAvailable(true);
+        projectSnapshotRepository.save(snapshot);
+    }
     private String buildIssueJql(JiraProjectRef projectRef, LocalDateTime lastSyncTime) {
         String base = "project=" + projectRef.projectKey();
         if (lastSyncTime == null) {
@@ -416,6 +468,38 @@ public class JiraApiClient {
         return seconds > 0 ? Math.max(1, (int) Math.ceil(seconds / 3600.0)) : 0;
     }
 
+
+    private LocalDate parseJiraDate(String value) {
+        LocalDateTime dateTime = parseJiraDateTime(value);
+        return dateTime != null ? dateTime.toLocalDate() : null;
+    }
+
+    private String joinTextArray(JsonNode arrayNode) {
+        if (arrayNode == null || !arrayNode.isArray() || arrayNode.isEmpty()) return null;
+        List<String> values = new ArrayList<>();
+        for (JsonNode node : arrayNode) {
+            String value = node.asText(null);
+            if (value != null && !value.isBlank()) values.add(value);
+        }
+        return values.isEmpty() ? null : String.join(",", values);
+    }
+
+    private String joinNamedArray(JsonNode arrayNode) {
+        if (arrayNode == null || !arrayNode.isArray() || arrayNode.isEmpty()) return null;
+        List<String> values = new ArrayList<>();
+        for (JsonNode node : arrayNode) {
+            String value = node.path("name").asText(null);
+            if (value != null && !value.isBlank()) values.add(value);
+        }
+        return values.isEmpty() ? null : String.join(",", values);
+    }
+
+    private String extractEpicKey(JsonNode fields) {
+        String parentKey = fields.path("parent").path("key").asText(null);
+        if (parentKey != null && !parentKey.isBlank()) return parentKey;
+        String epicLink = fields.path("customfield_10014").asText(null);
+        return epicLink != null && !epicLink.isBlank() ? epicLink : null;
+    }
     private Integer extractStoryPoints(JsonNode fields) {
         JsonNode storyPoints = fields.path("customfield_10016");
         if (storyPoints.isNumber()) {

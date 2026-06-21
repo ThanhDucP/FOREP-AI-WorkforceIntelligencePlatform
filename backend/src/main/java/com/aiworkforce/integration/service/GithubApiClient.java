@@ -3,6 +3,7 @@ package com.aiworkforce.integration.service;
 import com.aiworkforce.core.enums.IntegrationProvider;
 import com.aiworkforce.core.enums.TaskPriority;
 import com.aiworkforce.core.enums.TaskStatus;
+import com.aiworkforce.core.service.TokenProtectionService;
 import com.aiworkforce.identity.entity.Employee;
 import com.aiworkforce.identity.repository.EmployeeRepository;
 import com.aiworkforce.identity.service.TeamMembershipService;
@@ -49,6 +50,7 @@ public class GithubApiClient {
     private final GithubContributorRepository contributorRepository;
     private final GithubPullRequestRepository pullRequestRepository;
     private final GithubCommitRepository commitRepository;
+    private final TokenProtectionService tokenProtectionService;
 
     private String githubApiUrl = "https://api.github.com";
 
@@ -60,7 +62,7 @@ public class GithubApiClient {
     @Transactional
     public SyncResult syncIssues(TaskIntegrationConfig config, LocalDateTime lastSyncTime) {
         String projectKey = config.getProjectKey();
-        String accessToken = config.getAccessToken();
+        String accessToken = tokenProtectionService.unprotect(config.getAccessToken());
 
         if (projectKey == null || projectKey.isBlank()) {
             log.warn("Project key is blank, skipping GitHub sync for config: {}", config.getId());

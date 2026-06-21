@@ -1,10 +1,13 @@
 package com.aiworkforce.integration.service;
 
+import com.aiworkforce.core.enums.AuditActionType;
 import com.aiworkforce.core.enums.IntegrationProvider;
 import com.aiworkforce.core.enums.IntegrationSyncStatus;
 import com.aiworkforce.core.exception.BusinessException;
 import com.aiworkforce.core.exception.ResourceNotFoundException;
 import com.aiworkforce.core.security.AccessPolicyService;
+import com.aiworkforce.core.service.AuditLogService;
+import com.aiworkforce.core.service.TokenProtectionService;
 import com.aiworkforce.identity.entity.Project;
 import com.aiworkforce.identity.entity.Employee;
 import com.aiworkforce.identity.entity.Team;
@@ -31,6 +34,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.security.SecureRandom;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -47,6 +51,8 @@ public class TaskIntegrationService {
     private final GithubApiClient githubApiClient;
     private final JiraApiClient jiraApiClient;
     private final GithubWebhookRegistrar githubWebhookRegistrar;
+    private final AuditLogService auditLogService;
+    private final TokenProtectionService tokenProtectionService;
 
     @Value("${integration.sync.enabled:true}")
     private boolean scheduledSyncEnabled;
@@ -61,6 +67,7 @@ public class TaskIntegrationService {
     public void syncTasks(UUID configId) {
         TaskIntegrationConfig config = getActiveConfigById(configId);
         accessPolicyService.ensureIntegrationManage(config);
+        auditLogService.record(AuditActionType.SYNC_DATA, "TaskIntegrationConfig", config.getId(), config.getProvider().name(), Map.of("scope", "single"));
         syncConfig(config);
     }
 
@@ -80,11 +87,16 @@ public class TaskIntegrationService {
         new SecureRandom().nextBytes(randomBytes);
         String webhookSecret = java.util.Base64.getUrlEncoder().withoutPadding().encodeToString(randomBytes);
         config.setWebhookSecret(webhookSecret);
-        config.setAccessToken(request.getConnectionKey());
+        config.setAccessToken(tokenProtectionService.protect(request.getConnectionKey()));
         config.setProjectKey(resolveProviderProjectKey(project, request.getProvider(), request.getProjectKey()));
         config.setIsActive(request.getProvider() == IntegrationProvider.JIRA);
 
         TaskIntegrationConfig saved = configRepository.save(config);
+        auditLogService.record(AuditActionType.CONNECT_INTEGRATION, "TaskIntegrationConfig", saved.getId(), saved.getProvider().name(), Map.of(
+                "teamId", String.valueOf(saved.getTeam().getId()),
+                "projectId", saved.getProject() != null ? String.valueOf(saved.getProject().getId()) : "none",
+                "projectKey", saved.getProjectKey() != null ? saved.getProjectKey() : "none"
+        ));
 
         IntegrationConnectResponse resp = new IntegrationConnectResponse();
         resp.setConfigId(saved.getId().toString());
@@ -141,11 +153,16 @@ public class TaskIntegrationService {
         config.setProject(project);
         config.setProvider(request.getProvider());
         config.setWebhookSecret(request.getWebhookSecret());
-        config.setAccessToken(request.getAccessToken());
+        config.setAccessToken(tokenProtectionService.protect(request.getAccessToken()));
         config.setProjectKey(resolveProviderProjectKey(project, request.getProvider(), request.getProjectKey()));
         config.setIsActive(request.getIsActive() != null ? request.getIsActive() : true);
 
         TaskIntegrationConfig saved = configRepository.save(config);
+        auditLogService.record(AuditActionType.CONNECT_INTEGRATION, "TaskIntegrationConfig", saved.getId(), saved.getProvider().name(), Map.of(
+                "teamId", String.valueOf(saved.getTeam().getId()),
+                "projectId", saved.getProject() != null ? String.valueOf(saved.getProject().getId()) : "none",
+                "projectKey", saved.getProjectKey() != null ? saved.getProjectKey() : "none"
+        ));
         if (Boolean.TRUE.equals(saved.getIsActive())) {
             syncConfig(saved);
         }
@@ -172,12 +189,22 @@ public class TaskIntegrationService {
     @Transactional
     public void syncAllActiveConfigs() {
         Employee currentEmployee = accessPolicyService.currentEmployee();
-        if (!accessPolicyService.isAdmin(currentEmployee)) {
-            throw new BusinessException("Only admins can trigger all integration syncs");
+        if (!accessPolicyService.isDirector(currentEmployee) && !accessPolicyService.isManager(currentEmployee)) {
+            throw new BusinessException("Only directors or assigned managers can trigger business data syncs");
         }
+        auditLogService.record(AuditActionType.SYNC_DATA, "TaskIntegrationConfig", null, "SCOPED", Map.of("scope", "accessible"));
         for (TaskIntegrationConfig config : configRepository.findByIsActiveTrue()) {
-            syncConfig(config);
+            if (canManageIntegration(currentEmployee, config)) {
+                syncConfig(config);
+            }
         }
+    }
+
+    private boolean canManageIntegration(Employee employee, TaskIntegrationConfig config) {
+        if (config.getProject() != null) {
+            return accessPolicyService.canManageProject(employee, config.getProject());
+        }
+        return accessPolicyService.canManageTeam(employee, config.getTeam());
     }
 
     public IntegrationRuntimeStatusResponse getRuntimeStatus() {
@@ -241,7 +268,7 @@ public class TaskIntegrationService {
             config.setWebhookSecret(request.getWebhookSecret());
         }
         if (request.getAccessToken() != null) {
-            config.setAccessToken(request.getAccessToken());
+            config.setAccessToken(tokenProtectionService.protect(request.getAccessToken()));
         }
         if (request.getProjectKey() != null) {
             config.setProjectKey(resolveProviderProjectKey(config.getProject(), config.getProvider(), request.getProjectKey()));

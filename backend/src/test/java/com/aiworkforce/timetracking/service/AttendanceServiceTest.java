@@ -5,6 +5,7 @@ import com.aiworkforce.core.exception.BusinessException;
 import com.aiworkforce.identity.entity.Employee;
 import com.aiworkforce.identity.entity.Organization;
 import com.aiworkforce.identity.entity.Team;
+import com.aiworkforce.identity.repository.TeamRepository;
 import com.aiworkforce.identity.service.EmployeeService;
 import com.aiworkforce.timetracking.dto.AttendanceRequest;
 import com.aiworkforce.timetracking.dto.AttendanceResponse;
@@ -21,9 +22,13 @@ import java.time.LocalDate;
 import java.util.Optional;
 import java.util.UUID;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 public class AttendanceServiceTest {
@@ -34,24 +39,22 @@ public class AttendanceServiceTest {
     @Mock
     private EmployeeService employeeService;
 
+    @Mock
+    private TeamRepository teamRepository;
+
     @InjectMocks
     private AttendanceService attendanceService;
 
     private Employee employee;
-    private Organization organization;
-    private Team team;
 
     @BeforeEach
     public void setUp() {
-        organization = new Organization();
+        Organization organization = new Organization();
         organization.setId(UUID.randomUUID());
         organization.setName("Mock Org");
-        // Coordinates for Hoan Kiem Lake, Hanoi
-        organization.setLatitude(21.0285);
-        organization.setLongitude(105.8521);
-        organization.setAllowedRadiusMeters(200);
+        organization.setAddress("Hoan Kiem, Hanoi");
 
-        team = new Team();
+        Team team = new Team();
         team.setId(UUID.randomUUID());
         team.setOrganization(organization);
 
@@ -63,7 +66,7 @@ public class AttendanceServiceTest {
     }
 
     @Test
-    public void testCheckIn_Success_WithinRadius() {
+    public void testCheckIn_Success_WithoutGpsValidation() {
         when(employeeService.getCurrentEmployee()).thenReturn(employee);
         when(attendanceRepository.findByEmployeeIdAndCheckInDate(any(UUID.class), any(LocalDate.class)))
                 .thenReturn(Optional.empty());
@@ -76,69 +79,23 @@ public class AttendanceServiceTest {
 
         when(attendanceRepository.save(any(Attendance.class))).thenReturn(savedAttendance);
 
-        // Geolocation at a distance of ~50 meters from Hoan Kiem Lake
-        AttendanceRequest request = new AttendanceRequest();
-        request.setLatitude(21.0287);
-        request.setLongitude(105.8524);
-
-        AttendanceResponse response = attendanceService.checkIn(request);
+        AttendanceResponse response = attendanceService.checkIn(new AttendanceRequest());
 
         assertNotNull(response);
         verify(attendanceRepository, times(1)).save(any(Attendance.class));
     }
 
     @Test
-    public void testCheckIn_Failed_OutsideRadius() {
-        when(employeeService.getCurrentEmployee()).thenReturn(employee);
-        when(attendanceRepository.findByEmployeeIdAndCheckInDate(any(UUID.class), any(LocalDate.class)))
-                .thenReturn(Optional.empty());
-
-        // Geolocation in Ho Chi Minh City (far away from Hanoi)
-        AttendanceRequest request = new AttendanceRequest();
-        request.setLatitude(10.8231);
-        request.setLongitude(106.6297);
-
-        assertThrows(BusinessException.class, () -> {
-            attendanceService.checkIn(request);
-        });
-
-        verify(attendanceRepository, never()).save(any(Attendance.class));
-    }
-
-    @Test
-    public void testCheckIn_Failed_NullGPS() {
-        when(employeeService.getCurrentEmployee()).thenReturn(employee);
-        when(attendanceRepository.findByEmployeeIdAndCheckInDate(any(UUID.class), any(LocalDate.class)))
-                .thenReturn(Optional.empty());
-
-        AttendanceRequest request = new AttendanceRequest();
-        request.setLatitude(null);
-        request.setLongitude(null);
-
-        assertThrows(BusinessException.class, () -> {
-            attendanceService.checkIn(request);
-        });
-
-        verify(attendanceRepository, never()).save(any(Attendance.class));
-    }
-
-    @Test
     public void testCheckIn_Failed_AlreadyCheckedIn() {
         when(employeeService.getCurrentEmployee()).thenReturn(employee);
-        
+
         Attendance existing = new Attendance();
         existing.setId(UUID.randomUUID());
 
         when(attendanceRepository.findByEmployeeIdAndCheckInDate(any(UUID.class), any(LocalDate.class)))
                 .thenReturn(Optional.of(existing));
 
-        AttendanceRequest request = new AttendanceRequest();
-        request.setLatitude(21.0287);
-        request.setLongitude(105.8524);
-
-        assertThrows(BusinessException.class, () -> {
-            attendanceService.checkIn(request);
-        });
+        assertThrows(BusinessException.class, () -> attendanceService.checkIn(new AttendanceRequest()));
 
         verify(attendanceRepository, never()).save(any(Attendance.class));
     }

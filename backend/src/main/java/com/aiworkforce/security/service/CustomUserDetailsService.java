@@ -1,6 +1,7 @@
 package com.aiworkforce.security.service;
 
 import com.aiworkforce.identity.entity.Account;
+import com.aiworkforce.core.enums.AccountStatus;
 import com.aiworkforce.identity.repository.AccountRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -23,8 +24,8 @@ public class CustomUserDetailsService implements UserDetailsService {
         Account account = accountRepository.findByEmail(email)
                 .orElseThrow(() -> new UsernameNotFoundException("User not found with email: " + email));
                 
-        if (account.isLocked() || !account.isActive()) {
-            throw new RuntimeException("Account is locked or inactive");
+        if (account.isLocked() || !account.isActive() || account.getStatus() != AccountStatus.ACTIVE) {
+            throw new RuntimeException("Account is locked, inactive, or not activated");
         }
 
         return new User(

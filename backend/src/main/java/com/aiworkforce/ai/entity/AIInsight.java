@@ -5,11 +5,13 @@ import com.aiworkforce.core.enums.InsightType;
 import com.aiworkforce.identity.entity.Employee;
 import com.aiworkforce.identity.entity.Project;
 import com.aiworkforce.identity.entity.Team;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
 import java.time.LocalDateTime;
 
+@JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
 @Entity
 @Table(name = "ai_insight")
 @Getter

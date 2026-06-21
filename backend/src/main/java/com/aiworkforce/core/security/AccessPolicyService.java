@@ -1,8 +1,9 @@
 package com.aiworkforce.core.security;
 
 import com.aiworkforce.core.enums.RoleType;
-import com.aiworkforce.core.exception.BusinessException;
+import com.aiworkforce.core.exception.ForbiddenException;
 import com.aiworkforce.identity.entity.Employee;
+import com.aiworkforce.identity.entity.Organization;
 import com.aiworkforce.identity.entity.Project;
 import com.aiworkforce.identity.entity.Team;
 import com.aiworkforce.identity.repository.TeamRepository;
@@ -27,26 +28,51 @@ public class AccessPolicyService {
         return employeeService.getCurrentEmployee();
     }
 
+    public boolean isSystemAdmin(Employee employee) {
+        RoleType role = roleOf(employee);
+        return role == RoleType.SYSTEM_ADMIN || role == RoleType.ADMIN;
+    }
+
     public boolean isAdmin(Employee employee) {
-        return employee.getAccount() != null
-                && employee.getAccount().getRole() != null
-                && employee.getAccount().getRole().getName() == RoleType.ADMIN;
+        return isSystemAdmin(employee);
+    }
+
+    public boolean isDirector(Employee employee) {
+        return roleOf(employee) == RoleType.DIRECTOR;
+    }
+
+    public boolean isManager(Employee employee) {
+        return roleOf(employee) == RoleType.MANAGER;
     }
 
     public boolean isTeamLead(Employee employee, Team team) {
         return team != null && team.getManager() != null && team.getManager().getId().equals(employee.getId());
     }
 
+    public boolean sameOrganization(Employee employee, Organization organization) {
+        Organization currentOrg = organizationOf(employee);
+        return currentOrg != null && organization != null && currentOrg.getId().equals(organization.getId());
+    }
+
+    public boolean canAccessOrganization(Employee employee, Organization organization) {
+        return isSystemAdmin(employee) || sameOrganization(employee, organization);
+    }
+
+    public boolean canManageOrganization(Employee employee, Organization organization) {
+        return isSystemAdmin(employee) || (isDirector(employee) && sameOrganization(employee, organization));
+    }
+
     public boolean canAccessTeam(Employee employee, Team team) {
-        if (team == null) return false;
+        if (team == null || employee == null) return false;
         UUID teamId = team.getId();
-        return isAdmin(employee)
+        return (isDirector(employee) && sameOrganization(employee, team.getOrganization()))
                 || isTeamLead(employee, team)
                 || membershipService.hasActiveTeamAccess(employee.getId(), teamId);
     }
 
     public boolean canManageTeam(Employee employee, Team team) {
-        return isAdmin(employee) || isTeamLead(employee, team);
+        return team != null && employee != null && ((isDirector(employee) && sameOrganization(employee, team.getOrganization()))
+                || isTeamLead(employee, team));
     }
 
     public boolean canAccessProject(Employee employee, Project project) {
@@ -59,39 +85,54 @@ public class AccessPolicyService {
 
     public boolean canAccessTask(Employee employee, Task task) {
         if (task == null) return false;
+        if (task.getAssignee() != null && task.getAssignee().getId().equals(employee.getId())) {
+            return true;
+        }
         if (task.getProject() != null) {
             return canAccessProject(employee, task.getProject());
         }
         return canAccessTeam(employee, task.getTeam());
     }
 
+    public void ensureOrganizationAccess(Organization organization) {
+        if (!canAccessOrganization(currentEmployee(), organization)) {
+            throw new ForbiddenException("Current user does not have access to this organization");
+        }
+    }
+
+    public void ensureOrganizationManage(Organization organization) {
+        if (!canManageOrganization(currentEmployee(), organization)) {
+            throw new ForbiddenException("Only system admins or directors in this organization can manage it");
+        }
+    }
+
     public void ensureTeamAccess(Team team) {
         if (!canAccessTeam(currentEmployee(), team)) {
-            throw new BusinessException("Current user does not have access to this team");
+            throw new ForbiddenException("Current user does not have access to this team");
         }
     }
 
     public void ensureTeamManage(Team team) {
         if (!canManageTeam(currentEmployee(), team)) {
-            throw new BusinessException("Only organization admins or the team lead can manage this team");
+            throw new ForbiddenException("Only organization directors or the assigned team manager can manage this team");
         }
     }
 
     public void ensureProjectAccess(Project project) {
         if (!canAccessProject(currentEmployee(), project)) {
-            throw new BusinessException("Current user does not have access to this project");
+            throw new ForbiddenException("Current user does not have access to this project");
         }
     }
 
     public void ensureProjectManage(Project project) {
         if (!canManageProject(currentEmployee(), project)) {
-            throw new BusinessException("Only organization admins or the team lead can manage this project");
+            throw new ForbiddenException("Only organization directors or the assigned team manager can manage this project");
         }
     }
 
     public void ensureTaskAccess(Task task) {
         if (!canAccessTask(currentEmployee(), task)) {
-            throw new BusinessException("Current user does not have access to this task");
+            throw new ForbiddenException("Current user does not have access to this task");
         }
     }
 
@@ -112,6 +153,20 @@ public class AccessPolicyService {
     }
 
     public boolean managesAnyTeam(Employee employee) {
-        return !teamRepository.findByManagerId(employee.getId()).isEmpty();
+        return isDirector(employee) || isManager(employee) || !teamRepository.findByManagerId(employee.getId()).isEmpty();
+    }
+
+    private RoleType roleOf(Employee employee) {
+        return employee != null
+                && employee.getAccount() != null
+                && employee.getAccount().getRole() != null
+                ? employee.getAccount().getRole().getName()
+                : null;
+    }
+
+    private Organization organizationOf(Employee employee) {
+        if (employee == null) return null;
+        if (employee.getOrganization() != null) return employee.getOrganization();
+        return employee.getTeam() != null ? employee.getTeam().getOrganization() : null;
     }
 }

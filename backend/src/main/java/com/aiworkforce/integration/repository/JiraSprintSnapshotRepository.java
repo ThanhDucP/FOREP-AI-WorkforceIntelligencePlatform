@@ -12,4 +12,5 @@ import java.util.UUID;
 public interface JiraSprintSnapshotRepository extends JpaRepository<JiraSprintSnapshot, UUID> {
     Optional<JiraSprintSnapshot> findByConfigIdAndSprintId(UUID configId, Integer sprintId);
     List<JiraSprintSnapshot> findByTeamIdOrderByEndDateDesc(UUID teamId);
+    long countByTeamId(UUID teamId);
 }

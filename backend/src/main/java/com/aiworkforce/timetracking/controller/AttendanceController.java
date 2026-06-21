@@ -37,13 +37,13 @@ public class AttendanceController {
         return ResponseEntity.ok(ApiResponse.success(attendanceService.getMyAttendanceHistory()));
     }
 
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
+    @PreAuthorize("hasAnyRole('DIRECTOR', 'MANAGER')")
     @GetMapping("/employee/{employeeId}")
     public ResponseEntity<ApiResponse<List<AttendanceResponse>>> getEmployeeAttendanceHistory(@PathVariable UUID employeeId) {
         return ResponseEntity.ok(ApiResponse.success(attendanceService.getEmployeeAttendanceHistory(employeeId)));
     }
 
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
+    @PreAuthorize("hasAnyRole('DIRECTOR', 'MANAGER')")
     @GetMapping("/team/{teamId}")
     public ResponseEntity<ApiResponse<List<AttendanceResponse>>> getTeamAttendanceHistory(@PathVariable UUID teamId) {
         return ResponseEntity.ok(ApiResponse.success(attendanceService.getTeamAttendanceHistory(teamId)));
@@ -55,7 +55,7 @@ public class AttendanceController {
         return ResponseEntity.ok(ApiResponse.success(attendanceService.getManagedTeamAttendanceHistory()));
     }
 
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
+    @PreAuthorize("hasAnyRole('DIRECTOR', 'MANAGER')")
     @GetMapping("/organization/{organizationId}")
     public ResponseEntity<ApiResponse<List<AttendanceResponse>>> getOrganizationAttendanceHistory(@PathVariable UUID organizationId) {
         return ResponseEntity.ok(ApiResponse.success(attendanceService.getOrganizationAttendanceHistory(organizationId)));

@@ -26,6 +26,10 @@ public class AnalyticsDashboardResponse {
     private Map<BurnoutRisk, Long> burnoutRiskCount;
     private List<RecentActivity> recentActivity;
     private AiInsightSummary aiInsightSummary;
+    private ProjectHealth projectHealth;
+    private TeamAnalytics teamAnalytics;
+    private GithubAnalytics githubAnalytics;
+    private SprintAnalytics sprintAnalytics;
 
     @Data
     @Builder
@@ -54,6 +58,57 @@ public class AnalyticsDashboardResponse {
         private UUID assigneeId;
         private String assigneeName;
         private LocalDateTime updatedAt;
+    }
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class ProjectHealth {
+        private int score;
+        private long totalIssues;
+        private long overdueIssues;
+        private long blockedIssues;
+        private double completionRate;
+        private Map<String, Long> priorityDistribution;
+        private Map<String, Long> statusDistribution;
+    }
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class TeamAnalytics {
+        private long assignedIssueCount;
+        private long unassignedIssueCount;
+        private double averageOpenIssuesPerEmployee;
+        private List<EmployeeWorkload> workloadDistribution;
+    }
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class GithubAnalytics {
+        private boolean available;
+        private long repositoryCount;
+        private long commitCount;
+        private long pullRequestCount;
+        private long openPullRequestCount;
+        private long mergedPullRequestCount;
+        private long reviewDelayRiskCount;
+    }
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class SprintAnalytics {
+        private boolean available;
+        private String message;
+        private long sprintCount;
+        private long issuesWithSprint;
+        private long issuesWithStoryPoints;
     }
 
     @Data

@@ -7,6 +7,7 @@ import com.aiworkforce.identity.dto.TeamResponse;
 import com.aiworkforce.identity.service.TeamService;
 import com.aiworkforce.identity.service.EmployeeService;
 import com.aiworkforce.identity.service.TeamMembershipService;
+import com.aiworkforce.core.security.ReadOnlyScopeGuard;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -24,21 +25,22 @@ public class TeamController {
     private final TeamService teamService;
     private final TeamMembershipService membershipService;
     private final EmployeeService employeeService;
+    private final ReadOnlyScopeGuard readOnlyScopeGuard;
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
+    @PreAuthorize("hasAnyRole('DIRECTOR', 'MANAGER')")
     public ResponseEntity<ApiResponse<List<TeamResponse>>> getAllTeams() {
         return ResponseEntity.ok(ApiResponse.success(teamService.getAllTeams()));
     }
 
     @GetMapping("/organization/{organizationId}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
+    @PreAuthorize("hasAnyRole('DIRECTOR', 'MANAGER')")
     public ResponseEntity<ApiResponse<List<TeamResponse>>> getTeamsByOrganization(@PathVariable UUID organizationId) {
         return ResponseEntity.ok(ApiResponse.success(teamService.getTeamsByOrganization(organizationId)));
     }
 
     @GetMapping("/managed-by/{managerId}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
+    @PreAuthorize("hasAnyRole('DIRECTOR', 'MANAGER')")
     public ResponseEntity<ApiResponse<List<TeamResponse>>> getTeamsByManager(@PathVariable UUID managerId) {
         return ResponseEntity.ok(ApiResponse.success(teamService.getTeamsByManager(managerId)));
     }
@@ -50,61 +52,64 @@ public class TeamController {
     }
 
     @GetMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
+    @PreAuthorize("hasAnyRole('DIRECTOR', 'MANAGER')")
     public ResponseEntity<ApiResponse<TeamResponse>> getTeamById(@PathVariable UUID id) {
         return ResponseEntity.ok(ApiResponse.success(teamService.getTeamById(id)));
     }
 
     @GetMapping("/{id}/members")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
+    @PreAuthorize("hasAnyRole('DIRECTOR', 'MANAGER')")
     public ResponseEntity<ApiResponse<List<EmployeeResponse>>> getTeamMembers(@PathVariable UUID id) {
         return ResponseEntity.ok(ApiResponse.success(teamService.getTeamMembers(id)));
     }
 
     @PostMapping
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('DIRECTOR', 'MANAGER')")
     public ResponseEntity<ApiResponse<TeamResponse>> createTeam(@Valid @RequestBody TeamRequest request) {
-        return ResponseEntity.ok(ApiResponse.success(teamService.createTeam(request)));
+        readOnlyScopeGuard.block("CREATE_TEAM", "Team", null);
+        return ResponseEntity.ok(ApiResponse.success(null));
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('DIRECTOR', 'MANAGER')")
     public ResponseEntity<ApiResponse<TeamResponse>> updateTeam(@PathVariable UUID id, @Valid @RequestBody TeamRequest request) {
-        return ResponseEntity.ok(ApiResponse.success(teamService.updateTeam(id, request)));
+        readOnlyScopeGuard.block("UPDATE_TEAM", "Team", id);
+        return ResponseEntity.ok(ApiResponse.success(null));
     }
 
     @PutMapping("/{id}/assign-employee")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
+    @PreAuthorize("hasAnyRole('DIRECTOR', 'MANAGER')")
     public ResponseEntity<ApiResponse<Void>> assignEmployeeToTeam(@PathVariable("id") UUID teamId, @RequestParam UUID employeeId) {
-        teamService.assignEmployeeToTeam(employeeId, teamId);
+        readOnlyScopeGuard.block("ASSIGN_EMPLOYEE_TO_TEAM", "Team", teamId);
         return ResponseEntity.ok(ApiResponse.success(null));
     }
 
     @PostMapping("/{id}/members/request")
     public ResponseEntity<ApiResponse<UUID>> requestJoinTeam(@PathVariable("id") UUID teamId) {
-        UUID employeeId = employeeService.getCurrentEmployee().getId();
-        return ResponseEntity.ok(ApiResponse.success(membershipService.requestJoinTeam(employeeId, teamId).getId()));
+        readOnlyScopeGuard.block("REQUEST_JOIN_TEAM", "Team", teamId);
+        return ResponseEntity.ok(ApiResponse.success(null));
     }
 
     @PostMapping("/memberships/{membershipId}/approve")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
+    @PreAuthorize("hasAnyRole('DIRECTOR', 'MANAGER')")
     public ResponseEntity<ApiResponse<UUID>> approveMembership(@PathVariable UUID membershipId) {
-        UUID leadId = employeeService.getCurrentEmployee().getId();
-        return ResponseEntity.ok(ApiResponse.success(membershipService.approveMembership(membershipId, leadId).getId()));
+        readOnlyScopeGuard.block("APPROVE_TEAM_MEMBERSHIP", "TeamMembership", membershipId);
+        return ResponseEntity.ok(ApiResponse.success(null));
     }
 
     @PostMapping("/members/{employeeId}/end-active")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
+    @PreAuthorize("hasAnyRole('DIRECTOR', 'MANAGER')")
     public ResponseEntity<ApiResponse<Void>> endActiveMembership(@PathVariable UUID employeeId) {
-        UUID leadId = employeeService.getCurrentEmployee().getId();
-        membershipService.endActiveMembership(employeeId, leadId);
+        readOnlyScopeGuard.block("END_ACTIVE_TEAM_MEMBERSHIP", "Employee", employeeId);
         return ResponseEntity.ok(ApiResponse.success(null));
     }
 
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('DIRECTOR', 'MANAGER')")
     public ResponseEntity<ApiResponse<Void>> deleteTeam(@PathVariable UUID id) {
-        teamService.deleteTeam(id);
+        readOnlyScopeGuard.block("DELETE_TEAM", "Team", id);
         return ResponseEntity.ok(ApiResponse.success(null));
     }
 }
+
+

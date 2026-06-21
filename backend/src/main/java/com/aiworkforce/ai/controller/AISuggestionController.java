@@ -35,13 +35,13 @@ public class AISuggestionController {
     }
 
     @GetMapping("/employee/{employeeId}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER') or @employeeService.getCurrentEmployee().getId().equals(#employeeId)")
+    @PreAuthorize("hasAnyRole('DIRECTOR', 'MANAGER') or @employeeService.getCurrentEmployee().getId().equals(#employeeId)")
     public ResponseEntity<ApiResponse<List<AISuggestionResponse>>> getSuggestionsForEmployee(@PathVariable UUID employeeId) {
         return ResponseEntity.ok(ApiResponse.success(aiSuggestionService.getSuggestionsForEmployee(employeeId)));
     }
 
     @GetMapping("/team/{teamId}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
+    @PreAuthorize("hasAnyRole('DIRECTOR', 'MANAGER')")
     public ResponseEntity<ApiResponse<List<AISuggestionResponse>>> getSuggestionsForTeam(@PathVariable UUID teamId) {
         return ResponseEntity.ok(ApiResponse.success(aiSuggestionService.getSuggestionsForTeam(teamId)));
     }
@@ -53,13 +53,13 @@ public class AISuggestionController {
     }
 
     @GetMapping("/organization/{organizationId}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
+    @PreAuthorize("hasAnyRole('DIRECTOR', 'MANAGER')")
     public ResponseEntity<ApiResponse<List<AISuggestionResponse>>> getSuggestionsForOrganization(@PathVariable UUID organizationId) {
         return ResponseEntity.ok(ApiResponse.success(aiSuggestionService.getSuggestionsForOrganization(organizationId)));
     }
 
     @PostMapping("/{id}/adopt")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
+    @PreAuthorize("hasAnyRole('DIRECTOR', 'MANAGER')")
     public ResponseEntity<ApiResponse<AISuggestionResponse>> adoptSuggestion(@PathVariable UUID id) {
         return ResponseEntity.ok(ApiResponse.success(aiSuggestionService.adoptSuggestion(id)));
     }

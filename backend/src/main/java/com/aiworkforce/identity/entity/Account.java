@@ -1,5 +1,6 @@
 package com.aiworkforce.identity.entity;
 import com.aiworkforce.core.base.AuditableEntity;
+import com.aiworkforce.core.enums.AccountStatus;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
@@ -24,6 +25,9 @@ public class Account extends AuditableEntity {
     @Column(name = "jira_id", unique = true)
     private String jiraId;
     
+    @Enumerated(EnumType.STRING)
+    private AccountStatus status = AccountStatus.ACTIVE;
+
     private boolean active = true;
     private boolean locked = false;
     private int failedLoginAttempts = 0;

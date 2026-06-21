@@ -21,7 +21,10 @@ public class EmployeeResponse {
     private String avatarUrl;
     private UUID teamId;
     private String teamName;
+    private UUID organizationId;
+    private String organizationName;
     private String role;
+    private String accountStatus;
     private String department;
     private String avatarInitials;
     private Double workloadScore;

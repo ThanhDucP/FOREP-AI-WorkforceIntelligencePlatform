@@ -4,6 +4,7 @@ import com.aiworkforce.core.response.ApiResponse;
 import com.aiworkforce.identity.dto.ProjectRequest;
 import com.aiworkforce.identity.dto.ProjectResponse;
 import com.aiworkforce.identity.service.ProjectService;
+import com.aiworkforce.core.security.ReadOnlyScopeGuard;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -19,6 +20,7 @@ import java.util.UUID;
 public class ProjectController {
 
     private final ProjectService projectService;
+    private final ReadOnlyScopeGuard readOnlyScopeGuard;
 
     @GetMapping("/{id}")
     public ResponseEntity<ApiResponse<ProjectResponse>> getProject(@PathVariable UUID id) {
@@ -36,14 +38,16 @@ public class ProjectController {
     }
 
     @PostMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
+    @PreAuthorize("hasAnyRole('DIRECTOR', 'MANAGER')")
     public ResponseEntity<ApiResponse<ProjectResponse>> createProject(@Valid @RequestBody ProjectRequest request) {
-        return ResponseEntity.ok(ApiResponse.success(projectService.createProject(request)));
+        readOnlyScopeGuard.block("CREATE_PROJECT", "Project", null);
+        return ResponseEntity.ok(ApiResponse.success(null));
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
+    @PreAuthorize("hasAnyRole('DIRECTOR', 'MANAGER')")
     public ResponseEntity<ApiResponse<ProjectResponse>> updateProject(@PathVariable UUID id, @Valid @RequestBody ProjectRequest request) {
-        return ResponseEntity.ok(ApiResponse.success(projectService.updateProject(id, request)));
+        readOnlyScopeGuard.block("UPDATE_PROJECT", "Project", id);
+        return ResponseEntity.ok(ApiResponse.success(null));
     }
 }
