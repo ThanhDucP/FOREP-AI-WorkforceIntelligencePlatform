@@ -1,6 +1,7 @@
 package com.aiworkforce.identity.controller;
 
 import com.aiworkforce.core.enums.AccountStatus;
+import com.aiworkforce.core.pagination.PaginationResponse;
 import com.aiworkforce.core.response.ApiResponse;
 import com.aiworkforce.identity.dto.EmployeeResponse;
 import com.aiworkforce.identity.dto.OrganizationRequest;
@@ -46,11 +47,13 @@ public class OrganizationController {
 
     @GetMapping("/{id}/users")
     @PreAuthorize("hasAnyRole('SYSTEM_ADMIN', 'ADMIN', 'DIRECTOR', 'MANAGER')")
-    public ResponseEntity<ApiResponse<List<EmployeeResponse>>> getOrganizationUsers(
+    public ResponseEntity<ApiResponse<PaginationResponse<EmployeeResponse>>> getOrganizationUsers(
             @PathVariable UUID id,
-            @RequestParam(required = false) AccountStatus accountStatus
+            @RequestParam(required = false) AccountStatus accountStatus,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size
     ) {
-        return ResponseEntity.ok(ApiResponse.success(employeeService.getEmployeesByOrganization(id, accountStatus)));
+        return ResponseEntity.ok(ApiResponse.success(employeeService.getEmployeesByOrganization(id, accountStatus, page, size)));
     }
 
     @PostMapping

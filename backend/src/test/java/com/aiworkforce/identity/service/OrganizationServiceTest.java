@@ -1,19 +1,25 @@
 package com.aiworkforce.identity.service;
 
+import com.aiworkforce.core.enums.RoleType;
 import com.aiworkforce.core.exception.ResourceNotFoundException;
 import com.aiworkforce.identity.dto.OrganizationRequest;
 import com.aiworkforce.identity.dto.OrganizationResponse;
+import com.aiworkforce.identity.entity.Account;
 import com.aiworkforce.identity.entity.Organization;
-import com.aiworkforce.identity.repository.OrganizationRepository;
+import com.aiworkforce.identity.entity.Role;
 import com.aiworkforce.identity.repository.AccountRepository;
 import com.aiworkforce.identity.repository.EmployeeRepository;
+import com.aiworkforce.identity.repository.OrganizationRepository;
 import com.aiworkforce.identity.repository.RoleRepository;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.util.Collections;
@@ -21,9 +27,13 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 public class OrganizationServiceTest {
@@ -65,8 +75,28 @@ public class OrganizationServiceTest {
         request.setAddress("456 Insight Avenue, Hanoi");
     }
 
+    @AfterEach
+    public void tearDown() {
+        SecurityContextHolder.clearContext();
+    }
+
+    private void mockAdminAuthentication() {
+        Role adminRole = new Role();
+        adminRole.setName(RoleType.ADMIN);
+
+        Account adminAccount = new Account();
+        adminAccount.setEmail("admin@forep.local");
+        adminAccount.setRole(adminRole);
+
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken("admin@forep.local", null, Collections.emptyList())
+        );
+        when(accountRepository.findByEmail("admin@forep.local")).thenReturn(Optional.of(adminAccount));
+    }
+
     @Test
     public void testGetAllOrganizations() {
+        mockAdminAuthentication();
         when(organizationRepository.findAll()).thenReturn(Collections.singletonList(organization));
 
         List<OrganizationResponse> responses = organizationService.getAllOrganizations();
@@ -78,12 +108,15 @@ public class OrganizationServiceTest {
 
     @Test
     public void testGetOrganizationById_Success() {
+        mockAdminAuthentication();
         when(organizationRepository.findById(orgId)).thenReturn(Optional.of(organization));
+        when(employeeRepository.findDistinctByOrganizationScopeAndAccountStatus(orgId, null)).thenReturn(List.of());
 
         OrganizationResponse response = organizationService.getOrganizationById(orgId);
 
         assertNotNull(response);
         assertEquals("FOREP Corp", response.getName());
+        assertEquals(0, response.getUsers().size());
     }
 
     @Test
@@ -98,11 +131,12 @@ public class OrganizationServiceTest {
     @Test
     public void testCreateOrganization() {
         when(organizationRepository.save(any(Organization.class))).thenReturn(organization);
+        when(employeeRepository.findDistinctByOrganizationScopeAndAccountStatus(orgId, null)).thenReturn(List.of());
 
         OrganizationResponse response = organizationService.createOrganization(request);
 
         assertNotNull(response);
-        assertEquals("FOREP Corp", response.getName()); // Mock repository returns the predefined mock
+        assertEquals("FOREP Corp", response.getName());
         verify(organizationRepository, times(1)).save(any(Organization.class));
     }
 
@@ -110,6 +144,7 @@ public class OrganizationServiceTest {
     public void testUpdateOrganization_Success() {
         when(organizationRepository.findById(orgId)).thenReturn(Optional.of(organization));
         when(organizationRepository.save(any(Organization.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(employeeRepository.findDistinctByOrganizationScopeAndAccountStatus(orgId, null)).thenReturn(List.of());
 
         OrganizationResponse response = organizationService.updateOrganization(orgId, request);
 

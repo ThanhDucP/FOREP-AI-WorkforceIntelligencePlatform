@@ -2,7 +2,9 @@ package com.aiworkforce.identity.service;
 
 import com.aiworkforce.core.email.EmailDeliveryService;
 import com.aiworkforce.core.enums.AccountStatus;
+import com.aiworkforce.core.enums.RoleType;
 import com.aiworkforce.core.exception.BusinessException;
+import com.aiworkforce.core.exception.ForbiddenException;
 import com.aiworkforce.core.exception.ResourceNotFoundException;
 import com.aiworkforce.core.security.AccessPolicyService;
 import com.aiworkforce.identity.dto.EmployeeInvitationResponse;
@@ -12,6 +14,8 @@ import com.aiworkforce.identity.repository.AccountRepository;
 import com.aiworkforce.identity.repository.EmployeeRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -91,6 +95,9 @@ public class EmployeeAccountService {
     private Employee getEmployeeForManage(UUID employeeId) {
         Employee employee = employeeRepository.findById(employeeId)
                 .orElseThrow(() -> new ResourceNotFoundException("Employee not found"));
+        if (currentAccountIsAdmin()) {
+            return employee;
+        }
         if (employee.getTeam() != null) {
             accessPolicyService.ensureTeamManage(employee.getTeam());
         } else if (employee.getOrganization() != null) {
@@ -101,6 +108,17 @@ public class EmployeeAccountService {
         return employee;
     }
 
+
+    private boolean currentAccountIsAdmin() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || !authentication.isAuthenticated() || "anonymousUser".equals(authentication.getName())) {
+            return false;
+        }
+        Account account = accountRepository.findByEmail(authentication.getName())
+                .orElseThrow(() -> new ForbiddenException("Current account was not found"));
+        RoleType role = account.getRole() != null ? account.getRole().getName() : null;
+        return role == RoleType.SYSTEM_ADMIN || role == RoleType.ADMIN;
+    }
     private Account requireAccount(Employee employee) {
         if (employee.getAccount() == null) {
             throw new BusinessException("Employee has no account");

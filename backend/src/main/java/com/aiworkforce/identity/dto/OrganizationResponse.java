@@ -9,6 +9,7 @@ import lombok.NoArgsConstructor;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.UUID;
+import java.util.List;
 
 @Data
 @Builder
@@ -26,6 +27,7 @@ public class OrganizationResponse {
     private String adminNote;
     private Integer maxUsers;
     private long userCount;
+    private List<EmployeeResponse> users;
     private UUID directorId;
     private String directorName;
     private String directorEmail;

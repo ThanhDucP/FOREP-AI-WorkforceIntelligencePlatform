@@ -18,7 +18,9 @@ import com.aiworkforce.identity.repository.OrganizationRepository;
 import com.aiworkforce.identity.repository.TeamRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -39,11 +41,7 @@ public class EmployeeService {
     private final OrganizationRepository organizationRepository;
 
     public Employee getCurrentEmployee() {
-        String email = SecurityContextHolder.getContext().getAuthentication().getName();
-        Account account = accountRepository.findByEmail(email)
-                .orElseThrow(() -> new ResourceNotFoundException("Account not found for email: " + email));
-        return employeeRepository.findByAccountId(account.getId())
-                .orElseThrow(() -> new ResourceNotFoundException("Employee details not found for account: " + email));
+        return requireCurrentEmployee();
     }
 
     public EmployeeResponse getCurrentEmployeeProfile() {
@@ -73,7 +71,17 @@ public class EmployeeService {
 
     @Transactional(readOnly = true)
     public List<EmployeeResponse> getAllEmployees() {
-        return employeeRepository.findAll().stream()
+        if (currentAccountIsAdmin()) {
+            return employeeRepository.findAll().stream()
+                    .map(this::mapToResponse)
+                    .collect(Collectors.toList());
+        }
+
+        UUID organizationId = resolveOrganizationId(requireCurrentEmployee());
+        if (organizationId == null) {
+            return List.of();
+        }
+        return employeeRepository.findDistinctByOrganizationScopeAndAccountStatus(organizationId, null).stream()
                 .map(this::mapToResponse)
                 .collect(Collectors.toList());
     }
@@ -81,7 +89,22 @@ public class EmployeeService {
     @Transactional(readOnly = true)
     public PaginationResponse<EmployeeResponse> getAllEmployees(int page, int size) {
         validatePagination(page, size);
-        Page<Employee> employees = employeeRepository.findAll(PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt")));
+        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
+        Page<Employee> employees;
+
+        if (currentAccountIsAdmin()) {
+            employees = employeeRepository.findAll(pageable);
+        } else {
+            UUID organizationId = resolveOrganizationId(requireCurrentEmployee());
+            List<Employee> scopedEmployees = organizationId == null
+                    ? List.of()
+                    : employeeRepository.findDistinctByOrganizationScopeAndAccountStatus(organizationId, null);
+            int start = (int) pageable.getOffset();
+            int end = Math.min(start + pageable.getPageSize(), scopedEmployees.size());
+            List<Employee> pageContent = start >= scopedEmployees.size() ? List.of() : scopedEmployees.subList(start, end);
+            employees = new PageImpl<>(pageContent, pageable, scopedEmployees.size());
+        }
+
         return PaginationResponse.<EmployeeResponse>builder()
                 .content(employees.getContent().stream().map(this::mapToResponse).toList())
                 .pageNumber(employees.getNumber())
@@ -93,10 +116,11 @@ public class EmployeeService {
     }
 
     public List<EmployeeResponse> getEmployeesByTeam(UUID teamId) {
-        if (!teamRepository.existsById(teamId)) {
-            throw new ResourceNotFoundException("Team not found with id: " + teamId);
+        Team team = teamRepository.findById(teamId)
+                .orElseThrow(() -> new ResourceNotFoundException("Team not found with id: " + teamId));
+        if (!currentAccountIsAdmin()) {
+            ensureCurrentUserCanAccessOrganization(team.getOrganization());
         }
-
         return employeeRepository.findByTeamId(teamId).stream()
                 .map(this::mapToResponse)
                 .collect(Collectors.toList());
@@ -116,10 +140,26 @@ public class EmployeeService {
                 .map(this::mapToResponse)
                 .collect(Collectors.toList());
     }
+    @Transactional(readOnly = true)
+    public PaginationResponse<EmployeeResponse> getEmployeesByOrganization(UUID organizationId, AccountStatus accountStatus, int page, int size) {
+        validatePagination(page, size);
+        Organization organization = organizationRepository.findById(organizationId)
+                .orElseThrow(() -> new ResourceNotFoundException("Organization not found with id: " + organizationId));
+        ensureCurrentUserCanAccessOrganization(organization);
+        Page<Employee> employees = employeeRepository.findPageByOrganizationScopeAndAccountStatus(
+                organizationId,
+                accountStatus,
+                PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"))
+        );
+        return toPaginationResponse(employees);
+    }
 
     public EmployeeResponse getEmployeeById(UUID id) {
         Employee employee = employeeRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Employee not found with id: " + id));
+        if (!currentAccountIsAdmin()) {
+            ensureCurrentUserCanAccessEmployee(employee);
+        }
         return mapToResponse(employee);
     }
 
@@ -127,6 +167,7 @@ public class EmployeeService {
     public EmployeeResponse updateEmployee(UUID id, EmployeeRequest request) {
         Employee employee = employeeRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Employee not found"));
+        ensureCurrentUserCanAccessEmployee(employee);
         employee.setFirstName(request.getFirstName());
         employee.setLastName(request.getLastName());
         employee.setJobTitle(request.getJobTitle());
@@ -149,7 +190,19 @@ public class EmployeeService {
     public void deleteEmployee(UUID id) {
         Employee employee = employeeRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Employee not found"));
+        ensureCurrentUserCanAccessEmployee(employee);
         employeeRepository.delete(employee);
+    }
+
+    private PaginationResponse<EmployeeResponse> toPaginationResponse(Page<Employee> employees) {
+        return PaginationResponse.<EmployeeResponse>builder()
+                .content(employees.getContent().stream().map(this::mapToResponse).toList())
+                .pageNumber(employees.getNumber())
+                .pageSize(employees.getSize())
+                .totalElements(employees.getTotalElements())
+                .totalPages(employees.getTotalPages())
+                .isLast(employees.isLast())
+                .build();
     }
 
     private void validatePagination(int page, int size) {
@@ -162,44 +215,66 @@ public class EmployeeService {
     }
 
     private void ensureCurrentUserCanAccessOrganization(Organization organization) {
-        Employee currentEmployee = currentEmployeeIfAuthenticated();
-        if (currentEmployee == null || isAdmin(currentEmployee)) {
+        if (currentAccountIsAdmin()) {
             return;
         }
+        if (organization == null) {
+            throw new ForbiddenException("Current user does not have access to this organization");
+        }
 
-        UUID currentOrganizationId = resolveOrganizationId(currentEmployee);
+        UUID currentOrganizationId = resolveOrganizationId(requireCurrentEmployee());
         if (currentOrganizationId == null || organization.getId() == null || !currentOrganizationId.equals(organization.getId())) {
             throw new ForbiddenException("Current user does not have access to this organization");
         }
     }
 
-    private Employee currentEmployeeIfAuthenticated() {
+    private void ensureCurrentUserCanAccessEmployee(Employee employee) {
+        if (currentAccountIsAdmin()) {
+            return;
+        }
+        UUID employeeOrganizationId = resolveOrganizationId(employee);
+        UUID currentOrganizationId = resolveOrganizationId(requireCurrentEmployee());
+        if (employeeOrganizationId == null || currentOrganizationId == null || !employeeOrganizationId.equals(currentOrganizationId)) {
+            throw new ForbiddenException("Current user does not have access to this employee");
+        }
+    }
+
+    private Employee requireCurrentEmployee() {
+        Account account = currentAccountIfAuthenticated();
+        if (account == null) {
+            throw new ForbiddenException("Authentication is required");
+        }
+        return employeeRepository.findByAccountId(account.getId())
+                .orElseThrow(() -> new ForbiddenException("Current account is not linked to an employee profile"));
+    }
+
+    private Account currentAccountIfAuthenticated() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication == null || !authentication.isAuthenticated() || "anonymousUser".equals(authentication.getName())) {
             return null;
         }
 
         String email = authentication.getName();
-        Account account = accountRepository.findByEmail(email)
+        return accountRepository.findByEmail(email)
                 .orElseThrow(() -> new ResourceNotFoundException("Account not found for email: " + email));
-        return employeeRepository.findByAccountId(account.getId())
-                .orElseThrow(() -> new ResourceNotFoundException("Employee details not found for account: " + email));
     }
 
-    private boolean isAdmin(Employee employee) {
-        RoleType role = roleOf(employee);
+    private boolean currentAccountIsAdmin() {
+        Account account = currentAccountIfAuthenticated();
+        return isAdmin(account);
+    }
+
+    private boolean isAdmin(Account account) {
+        RoleType role = roleOf(account);
         return role == RoleType.SYSTEM_ADMIN || role == RoleType.ADMIN;
     }
 
-    private RoleType roleOf(Employee employee) {
-        return employee != null
-                && employee.getAccount() != null
-                && employee.getAccount().getRole() != null
-                ? employee.getAccount().getRole().getName()
-                : null;
+    private RoleType roleOf(Account account) {
+        return account != null && account.getRole() != null ? account.getRole().getName() : null;
     }
 
     private UUID resolveOrganizationId(Employee employee) {
+        if (employee == null) return null;
         if (employee.getOrganization() != null) return employee.getOrganization().getId();
         return employee.getTeam() != null && employee.getTeam().getOrganization() != null ? employee.getTeam().getOrganization().getId() : null;
     }

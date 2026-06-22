@@ -70,7 +70,6 @@ public class DataSeeder implements CommandLineRunner {
         organization.setName("Apex AI Solutions");
         organization.setDomain("apexai.com");
         organization.setGithubOrganization("apex-ai-solutions");
-        organization.setLogoUrl("https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=150&auto=format&fit=crop&q=60");
         organization = organizationRepository.save(organization);
 
         // 3. Create Sprints

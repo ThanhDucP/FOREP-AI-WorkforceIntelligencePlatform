@@ -6,6 +6,7 @@ import com.aiworkforce.core.enums.RoleType;
 import com.aiworkforce.core.exception.BusinessException;
 import com.aiworkforce.core.exception.ForbiddenException;
 import com.aiworkforce.core.exception.ResourceNotFoundException;
+import com.aiworkforce.identity.dto.EmployeeResponse;
 import com.aiworkforce.identity.dto.OrganizationRequest;
 import com.aiworkforce.identity.dto.OrganizationResponse;
 import com.aiworkforce.identity.entity.Account;
@@ -38,13 +39,13 @@ public class OrganizationService {
 
     @Transactional(readOnly = true)
     public List<OrganizationResponse> getAllOrganizations() {
-        Employee currentEmployee = currentEmployeeIfAuthenticated();
-        if (currentEmployee == null || isAdmin(currentEmployee)) {
+        if (currentAccountIsAdmin()) {
             return organizationRepository.findAll().stream()
                     .map(this::mapToResponse)
                     .toList();
         }
 
+        Employee currentEmployee = requireCurrentEmployee();
         UUID organizationId = resolveOrganizationId(currentEmployee);
         if (organizationId == null) {
             return List.of();
@@ -60,7 +61,7 @@ public class OrganizationService {
         Organization org = organizationRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Organization not found with id: " + id));
         ensureCurrentUserCanAccess(org);
-        return mapToResponse(org);
+        return mapToDetailResponse(org);
     }
 
     @Transactional
@@ -74,7 +75,7 @@ public class OrganizationService {
             saved.setDirector(director);
             saved = organizationRepository.save(saved);
         }
-        return mapToResponse(saved);
+        return mapToDetailResponse(saved);
     }
 
     @Transactional
@@ -84,7 +85,7 @@ public class OrganizationService {
 
         applyOrganizationFields(org, request);
         Organization saved = organizationRepository.save(org);
-        return mapToResponse(saved);
+        return mapToDetailResponse(saved);
     }
 
     @Transactional
@@ -119,11 +120,20 @@ public class OrganizationService {
                 .build();
     }
 
+    private OrganizationResponse mapToDetailResponse(Organization org) {
+        OrganizationResponse response = mapToResponse(org);
+        if (response != null && org.getId() != null) {
+            response.setUsers(employeeRepository.findDistinctByOrganizationScopeAndAccountStatus(org.getId(), null).stream()
+                    .map(this::mapEmployeeToResponse)
+                    .toList());
+        }
+        return response;
+    }
+
     private void applyOrganizationFields(Organization org, OrganizationRequest request) {
         validateContractDates(request);
         org.setName(request.getName());
         org.setDomain(request.getDomain());
-        org.setLogoUrl(request.getLogoUrl());
         org.setAddress(request.getAddress());
         org.setContractStatus(request.getContractStatus() != null ? request.getContractStatus() : ContractStatus.ACTIVE);
         org.setContractStartDate(request.getContractStartDate());
@@ -141,41 +151,49 @@ public class OrganizationService {
     }
 
     private void ensureCurrentUserCanAccess(Organization organization) {
-        Employee currentEmployee = currentEmployeeIfAuthenticated();
-        if (currentEmployee == null || isAdmin(currentEmployee)) {
+        if (currentAccountIsAdmin()) {
             return;
         }
 
+        Employee currentEmployee = requireCurrentEmployee();
         UUID currentOrganizationId = resolveOrganizationId(currentEmployee);
         if (currentOrganizationId == null || organization.getId() == null || !currentOrganizationId.equals(organization.getId())) {
             throw new ForbiddenException("Current user does not have access to this organization");
         }
     }
 
-    private Employee currentEmployeeIfAuthenticated() {
+    private Employee requireCurrentEmployee() {
+        Account account = currentAccountIfAuthenticated();
+        if (account == null) {
+            throw new ForbiddenException("Authentication is required");
+        }
+        return employeeRepository.findByAccountId(account.getId())
+                .orElseThrow(() -> new ForbiddenException("Current account is not linked to an employee profile"));
+    }
+
+    private Account currentAccountIfAuthenticated() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication == null || !authentication.isAuthenticated() || "anonymousUser".equals(authentication.getName())) {
             return null;
         }
 
         String email = authentication.getName();
-        Account account = accountRepository.findByEmail(email)
+        return accountRepository.findByEmail(email)
                 .orElseThrow(() -> new ResourceNotFoundException("Account not found for email: " + email));
-        return employeeRepository.findByAccountId(account.getId())
-                .orElseThrow(() -> new ResourceNotFoundException("Employee details not found for account: " + email));
     }
 
-    private boolean isAdmin(Employee employee) {
-        RoleType role = roleOf(employee);
+    private boolean currentAccountIsAdmin() {
+        Account account = currentAccountIfAuthenticated();
+        return isAdmin(account);
+    }
+
+    private boolean isAdmin(Account account) {
+        RoleType role = roleOf(account);
         return role == RoleType.SYSTEM_ADMIN || role == RoleType.ADMIN;
     }
 
-    private RoleType roleOf(Employee employee) {
-        return employee != null
-                && employee.getAccount() != null
-                && employee.getAccount().getRole() != null
-                ? employee.getAccount().getRole().getName()
-                : null;
+    private RoleType roleOf(Account account) {
+        return account != null && account.getRole() != null ? account.getRole().getName() : null;
     }
 
     private UUID resolveOrganizationId(Employee employee) {
@@ -183,6 +201,13 @@ public class OrganizationService {
         if (employee.getOrganization() != null) return employee.getOrganization().getId();
         return employee.getTeam() != null && employee.getTeam().getOrganization() != null
                 ? employee.getTeam().getOrganization().getId()
+                : null;
+    }
+
+    private String resolveOrganizationName(Employee employee) {
+        if (employee.getOrganization() != null) return employee.getOrganization().getName();
+        return employee.getTeam() != null && employee.getTeam().getOrganization() != null
+                ? employee.getTeam().getOrganization().getName()
                 : null;
     }
 
@@ -232,5 +257,36 @@ public class OrganizationService {
         String last = employee.getLastName() != null ? employee.getLastName() : "";
         String name = (first + " " + last).trim();
         return name.isBlank() ? employee.getId().toString() : name;
+    }
+
+    private EmployeeResponse mapEmployeeToResponse(Employee employee) {
+        if (employee == null) return null;
+        Account account = employee.getAccount();
+        return EmployeeResponse.builder()
+                .id(employee.getId())
+                .firstName(employee.getFirstName())
+                .lastName(employee.getLastName())
+                .jobTitle(employee.getJobTitle())
+                .phoneNumber(employee.getPhoneNumber())
+                .email(account != null ? account.getEmail() : null)
+                .avatarUrl(account != null ? account.getAvatarUrl() : null)
+                .teamId(employee.getTeam() != null ? employee.getTeam().getId() : null)
+                .teamName(employee.getTeam() != null ? employee.getTeam().getName() : null)
+                .organizationId(resolveOrganizationId(employee))
+                .organizationName(resolveOrganizationName(employee))
+                .role(account != null && account.getRole() != null ? account.getRole().getName().name() : null)
+                .accountStatus(account != null && account.getStatus() != null ? account.getStatus().name() : null)
+                .department(employee.getDepartment())
+                .avatarInitials(employee.getAvatarInitials())
+                .workloadScore(employee.getWorkloadScore())
+                .burnoutRisk(employee.getBurnoutRisk() != null ? employee.getBurnoutRisk().name() : null)
+                .contributionScore(employee.getContributionScore())
+                .overdueRatio(employee.getOverdueRatio())
+                .outOfHoursPct(employee.getOutOfHoursPct())
+                .avgCycleTimeDays(employee.getAvgCycleTimeDays())
+                .tasksShippedThisMonth(employee.getTasksShippedThisMonth())
+                .streakDays(employee.getStreakDays())
+                .focusScore(employee.getFocusScore())
+                .build();
     }
 }

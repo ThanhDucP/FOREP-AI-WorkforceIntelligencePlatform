@@ -2,6 +2,8 @@ package com.aiworkforce.identity.repository;
 
 import com.aiworkforce.core.enums.AccountStatus;
 import com.aiworkforce.identity.entity.Employee;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -39,6 +41,21 @@ public interface EmployeeRepository extends JpaRepository<Employee, UUID> {
     List<Employee> findDistinctByOrganizationScopeAndAccountStatus(
             @Param("organizationId") UUID organizationId,
             @Param("accountStatus") AccountStatus accountStatus
+    );
+
+    @Query("""
+            select distinct e
+            from Employee e
+            left join e.account a
+            left join e.team t
+            left join t.organization teamOrganization
+            where (e.organization.id = :organizationId or teamOrganization.id = :organizationId)
+              and (:accountStatus is null or a.status = :accountStatus)
+            """)
+    Page<Employee> findPageByOrganizationScopeAndAccountStatus(
+            @Param("organizationId") UUID organizationId,
+            @Param("accountStatus") AccountStatus accountStatus,
+            Pageable pageable
     );
 
     @Query("""
