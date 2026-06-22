@@ -7,6 +7,7 @@ import com.aiworkforce.identity.entity.Team;
 import com.aiworkforce.identity.repository.EmployeeRepository;
 import com.aiworkforce.identity.service.TeamMembershipService;
 import com.aiworkforce.integration.entity.TaskIntegrationConfig;
+import com.aiworkforce.integration.repository.ExternalIdentityRepository;
 import com.aiworkforce.integration.repository.JiraIssueSnapshotRepository;
 import com.aiworkforce.integration.repository.JiraProjectSnapshotRepository;
 import com.aiworkforce.integration.repository.JiraSprintSnapshotRepository;
@@ -56,9 +57,11 @@ public class JiraApiClientTest {
 
     @Mock
     private JiraIssueSnapshotRepository issueSnapshotRepository;
-
     @Mock
     private TokenProtectionService tokenProtectionService;
+
+    @Mock
+    private ExternalIdentityRepository externalIdentityRepository;
 
     private ObjectMapper objectMapper;
     private JiraApiClient jiraApiClient;
@@ -69,7 +72,7 @@ public class JiraApiClientTest {
     void setUp() {
         objectMapper = new ObjectMapper();
         lenient().when(tokenProtectionService.unprotect(any())).thenAnswer(invocation -> invocation.getArgument(0));
-        jiraApiClient = new JiraApiClient(taskRepository, employeeRepository, objectMapper, new TaskAssessmentService(), membershipService, projectSnapshotRepository, sprintSnapshotRepository, issueSnapshotRepository, tokenProtectionService);
+        jiraApiClient = new JiraApiClient(taskRepository, employeeRepository, objectMapper, new TaskAssessmentService(), membershipService, projectSnapshotRepository, sprintSnapshotRepository, issueSnapshotRepository, tokenProtectionService, externalIdentityRepository);
     }
 
     @AfterEach

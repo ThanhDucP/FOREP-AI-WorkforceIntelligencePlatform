@@ -1,5 +1,6 @@
 package com.aiworkforce.integration.service;
 
+import com.aiworkforce.core.enums.ExternalIdentityProvider;
 import com.aiworkforce.core.enums.IntegrationProvider;
 import com.aiworkforce.core.enums.TaskPriority;
 import com.aiworkforce.core.enums.TaskStatus;
@@ -8,11 +9,13 @@ import com.aiworkforce.identity.entity.Employee;
 import com.aiworkforce.identity.repository.EmployeeRepository;
 import com.aiworkforce.identity.service.TeamMembershipService;
 import com.aiworkforce.integration.dto.SyncResult;
+import com.aiworkforce.integration.entity.ExternalIdentity;
 import com.aiworkforce.integration.entity.GithubCommit;
 import com.aiworkforce.integration.entity.GithubContributor;
 import com.aiworkforce.integration.entity.GithubPullRequest;
 import com.aiworkforce.integration.entity.GithubRepositorySnapshot;
 import com.aiworkforce.integration.entity.TaskIntegrationConfig;
+import com.aiworkforce.integration.repository.ExternalIdentityRepository;
 import com.aiworkforce.integration.repository.GithubCommitRepository;
 import com.aiworkforce.integration.repository.GithubContributorRepository;
 import com.aiworkforce.integration.repository.GithubPullRequestRepository;
@@ -51,6 +54,7 @@ public class GithubApiClient {
     private final GithubPullRequestRepository pullRequestRepository;
     private final GithubCommitRepository commitRepository;
     private final TokenProtectionService tokenProtectionService;
+    private final ExternalIdentityRepository externalIdentityRepository;
 
     private String githubApiUrl = "https://api.github.com";
 
@@ -91,7 +95,7 @@ public class GithubApiClient {
             result.addFetched(syncPullRequests(webClient, config, projectKey, lastSyncTime));
             List<GithubCommitSignal> commitSignals = fetchCommitSignals(webClient, config, projectKey, lastSyncTime);
             result.addFetched(commitSignals.size());
-            result.merge(syncIssueTasks(webClient, config, projectKey, commitSignals, lastSyncTime));
+            // GitHub issues are activity signals in the read-only product scope; Jira issues remain the task source.
 
             log.info("Successfully synced GitHub repository {} | fetched: {}, created: {}, updated: {}",
                     projectKey, result.getTotalFetched(), result.getTotalCreated(), result.getTotalUpdated());
@@ -100,65 +104,6 @@ public class GithubApiClient {
             log.error("Failed to sync GitHub repository for config: {}", config.getId(), e);
             throw new RuntimeException("GitHub Sync Failed: " + e.getMessage(), e);
         }
-    }
-
-    private SyncResult syncIssueTasks(WebClient webClient, TaskIntegrationConfig config, String projectKey,
-                                      List<GithubCommitSignal> commitSignals, LocalDateTime lastSyncTime) throws Exception {
-        String responseJson = webClient.get()
-                .uri(uriBuilder -> uriBuilder
-                        .path("/repos/" + projectKey + "/issues")
-                        .queryParam("state", "all")
-                        .queryParam("per_page", 100)
-                        .queryParamIfPresent("since", Optional.ofNullable(formatGithubSince(lastSyncTime)))
-                        .build())
-                .retrieve()
-                .bodyToMono(String.class)
-                .block();
-
-        if (responseJson == null) {
-            log.warn("No issues found or empty response from GitHub API");
-            return SyncResult.empty();
-        }
-
-        JsonNode rootNode = objectMapper.readTree(responseJson);
-        if (!rootNode.isArray()) {
-            log.warn("Expected JSON array from GitHub API, but got: {}", responseJson);
-            return SyncResult.empty();
-        }
-
-        SyncResult result = SyncResult.empty();
-        for (JsonNode issueNode : rootNode) {
-            if (issueNode.has("pull_request")) {
-                continue;
-            }
-
-            String issueNumber = issueNode.path("number").asText();
-            String externalTicketRef = "GH-" + issueNumber;
-            Task task = upsertGithubTask(config, externalTicketRef);
-            boolean created = task.getId() == null;
-
-            String title = issueNode.path("title").asText();
-            String body = issueNode.path("body").asText("");
-            task.setTitle(title);
-            task.setDescription(body);
-            task.setExternalUrl(issueNode.path("html_url").asText(null));
-            task.setAssignee(resolveAssignee(issueNode.path("assignee"), config));
-            task.setTeam(config.getTeam());
-            task.setProject(config.getProject());
-            task.setPriority(mapPriority(issueNode.path("labels")));
-            task.setEstimatedHours(estimateHours(title, body));
-            task.setExternalDeleted(false);
-            applyGithubState(task, issueNode.path("state").asText());
-
-            TaskAssessmentService.GithubCommitMetrics metrics = assessLinkedCommits(
-                    commitSignals, issueNumber, externalTicketRef);
-            taskAssessmentService.assess(task, "GITHUB_SYNC", metrics);
-            taskRepository.save(task);
-
-            result.addFetched(1);
-            if (created) result.addCreated(); else result.addUpdated();
-        }
-        return result;
     }
 
     private void syncRepositoryMetadata(WebClient webClient, TaskIntegrationConfig config, String projectKey) {
@@ -212,12 +157,32 @@ public class GithubApiClient {
                 contributor.setHtmlUrl(contributorNode.path("html_url").asText(null));
                 contributor.setContributions(contributorNode.path("contributions").asInt(0));
                 contributorRepository.save(contributor);
+                upsertGithubIdentity(config, contributorNode);
             }
         } catch (Exception e) {
             log.warn("Unable to sync GitHub contributors for {}, continuing", projectKey);
         }
     }
 
+
+    private void upsertGithubIdentity(TaskIntegrationConfig config, JsonNode contributorNode) {
+        if (contributorNode == null || contributorNode.isMissingNode() || contributorNode.isNull()) return;
+        String login = contributorNode.path("login").asText(null);
+        if (login == null || login.isBlank()) return;
+        ExternalIdentity identity = externalIdentityRepository
+                .findByProviderAndExternalId(ExternalIdentityProvider.GITHUB, login)
+                .orElseGet(ExternalIdentity::new);
+        identity.setProvider(ExternalIdentityProvider.GITHUB);
+        identity.setExternalId(login);
+        identity.setUsername(login);
+        identity.setDisplayName(login);
+        identity.setAvatarUrl(contributorNode.path("avatar_url").asText(null));
+        identity.setTeam(config.getTeam());
+        if (config.getTeam() != null) {
+            identity.setOrganization(config.getTeam().getOrganization());
+        }
+        externalIdentityRepository.save(identity);
+    }
     private int syncPullRequests(WebClient webClient, TaskIntegrationConfig config, String projectKey, LocalDateTime lastSyncTime) {
         try {
             String pullsJson = webClient.get()
@@ -327,70 +292,6 @@ public class GithubApiClient {
         commit.setChangedFiles(files);
         commit.setCommittedAt(parseGithubDate(authorNode.path("date").asText(null)));
         commitRepository.save(commit);
-    }
-
-    private Task upsertGithubTask(TaskIntegrationConfig config, String externalTicketRef) {
-        Optional<Task> existingTaskOpt = config.getProject() != null
-                ? taskRepository.findByExternalTicketRefAndSourceProviderAndProjectId(externalTicketRef, IntegrationProvider.GITHUB, config.getProject().getId())
-                : taskRepository.findByExternalTicketRefAndSourceProvider(externalTicketRef, IntegrationProvider.GITHUB);
-        if (existingTaskOpt.isPresent()) return existingTaskOpt.get();
-        Task task = new Task();
-        task.setExternalTicketRef(externalTicketRef);
-        task.setSourceProvider(IntegrationProvider.GITHUB);
-        task.setTeam(config.getTeam());
-        task.setProject(config.getProject());
-        return task;
-    }
-
-    private Employee resolveAssignee(JsonNode assigneeNode, TaskIntegrationConfig config) {
-        if (assigneeNode == null || assigneeNode.isMissingNode() || assigneeNode.isNull()) return null;
-        String assigneeEmail = assigneeNode.path("email").asText();
-        if (assigneeEmail == null || assigneeEmail.isBlank()) return null;
-        Employee assignee = employeeRepository.findByAccountEmail(assigneeEmail).orElse(null);
-        if (assignee != null && !membershipService.hasActiveTeamAccess(assignee.getId(), config.getTeam().getId())) return null;
-        return assignee;
-    }
-
-    private void applyGithubState(Task task, String state) {
-        if ("closed".equalsIgnoreCase(state)) {
-            task.setStatus(TaskStatus.DONE);
-        } else if (task.getStatus() == null || task.getStatus() == TaskStatus.DONE) {
-            task.setStatus(TaskStatus.TODO);
-        }
-    }
-
-    private TaskAssessmentService.GithubCommitMetrics assessLinkedCommits(List<GithubCommitSignal> commits, String issueNumber, String externalTicketRef) {
-        int count = 0;
-        int additions = 0;
-        int deletions = 0;
-        int files = 0;
-        String issueMarker = "#" + issueNumber;
-        for (GithubCommitSignal commit : commits) {
-            String message = commit.message().toUpperCase();
-            if (message.contains(issueMarker.toUpperCase()) || message.contains(externalTicketRef.toUpperCase())) {
-                count++;
-                additions += commit.additions();
-                deletions += commit.deletions();
-                files += commit.changedFiles();
-            }
-        }
-        return taskAssessmentService.assessGithubCommits(count, additions, deletions, files);
-    }
-
-    private TaskPriority mapPriority(JsonNode labels) {
-        if (labels == null || !labels.isArray()) return TaskPriority.MEDIUM;
-        for (JsonNode label : labels) {
-            String name = label.path("name").asText("").toLowerCase();
-            if (name.contains("critical") || name.contains("blocker")) return TaskPriority.CRITICAL;
-            if (name.contains("high")) return TaskPriority.HIGH;
-            if (name.contains("low")) return TaskPriority.LOW;
-        }
-        return TaskPriority.MEDIUM;
-    }
-
-    private int estimateHours(String title, String body) {
-        int length = (title == null ? 0 : title.length()) + (body == null ? 0 : body.length());
-        return Math.max(1, Math.min(40, 2 + (length / 400)));
     }
 
     private String formatGithubSince(LocalDateTime value) {

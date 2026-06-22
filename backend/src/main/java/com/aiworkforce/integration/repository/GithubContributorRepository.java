@@ -12,4 +12,6 @@ import java.util.UUID;
 public interface GithubContributorRepository extends JpaRepository<GithubContributor, UUID> {
     Optional<GithubContributor> findByConfigIdAndRepositoryFullNameIgnoreCaseAndLoginIgnoreCase(UUID configId, String repositoryFullName, String login);
     List<GithubContributor> findByTeamIdOrderByContributionsDesc(UUID teamId);
+    List<GithubContributor> findByProjectIdOrderByContributionsDesc(UUID projectId);
+    List<GithubContributor> findByTeamOrganizationIdOrderByContributionsDesc(UUID organizationId);
 }

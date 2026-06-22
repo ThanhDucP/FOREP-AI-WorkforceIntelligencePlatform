@@ -12,6 +12,8 @@ import java.util.UUID;
 public interface GithubPullRequestRepository extends JpaRepository<GithubPullRequest, UUID> {
     Optional<GithubPullRequest> findByConfigIdAndRepositoryFullNameIgnoreCaseAndNumber(UUID configId, String repositoryFullName, Integer number);
     List<GithubPullRequest> findByTeamIdOrderByProviderUpdatedAtDesc(UUID teamId);
+    List<GithubPullRequest> findByProjectIdOrderByProviderUpdatedAtDesc(UUID projectId);
+    List<GithubPullRequest> findByTeamOrganizationIdOrderByProviderUpdatedAtDesc(UUID organizationId);
     long countByStateIgnoreCase(String state);
     long countByMergedTrue();
 }

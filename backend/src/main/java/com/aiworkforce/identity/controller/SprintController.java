@@ -3,12 +3,13 @@ package com.aiworkforce.identity.controller;
 import com.aiworkforce.core.response.ApiResponse;
 import com.aiworkforce.identity.dto.SprintResponse;
 import com.aiworkforce.identity.service.SprintService;
-import com.aiworkforce.core.security.ReadOnlyScopeGuard;
-import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 import java.util.UUID;
@@ -19,7 +20,6 @@ import java.util.UUID;
 public class SprintController {
 
     private final SprintService sprintService;
-    private final ReadOnlyScopeGuard readOnlyScopeGuard;
 
     @GetMapping
     public ResponseEntity<ApiResponse<List<SprintResponse>>> getAllSprints() {
@@ -46,26 +46,5 @@ public class SprintController {
     @GetMapping("/{id}")
     public ResponseEntity<ApiResponse<SprintResponse>> getSprintById(@PathVariable UUID id) {
         return ResponseEntity.ok(ApiResponse.success(sprintService.getSprintById(id)));
-    }
-
-    @PostMapping
-    @PreAuthorize("hasAnyRole('DIRECTOR', 'MANAGER')")
-    public ResponseEntity<ApiResponse<SprintResponse>> createSprint(@Valid @RequestBody SprintResponse request) {
-        readOnlyScopeGuard.block("CREATE_SPRINT", "Sprint", null);
-        return ResponseEntity.ok(ApiResponse.success(null));
-    }
-
-    @PutMapping("/{id}")
-    @PreAuthorize("hasAnyRole('DIRECTOR', 'MANAGER')")
-    public ResponseEntity<ApiResponse<SprintResponse>> updateSprint(@PathVariable UUID id, @Valid @RequestBody SprintResponse request) {
-        readOnlyScopeGuard.block("UPDATE_SPRINT", "Sprint", id);
-        return ResponseEntity.ok(ApiResponse.success(null));
-    }
-
-    @DeleteMapping("/{id}")
-    @PreAuthorize("hasAnyRole('DIRECTOR', 'MANAGER')")
-    public ResponseEntity<ApiResponse<Void>> deleteSprint(@PathVariable UUID id) {
-        readOnlyScopeGuard.block("DELETE_SPRINT", "Sprint", id);
-        return ResponseEntity.ok(ApiResponse.success(null));
     }
 }

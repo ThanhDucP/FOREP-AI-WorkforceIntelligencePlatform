@@ -61,6 +61,7 @@ public class SecurityConfig {
                                 "/api/v1/auth/login",
                                 "/api/v1/auth/register",
                                 "/api/v1/auth/oauth2/**",
+                                "/api/v1/employees/activate-by-token",
 
                                 "/oauth2/**",
                                 "/login/oauth2/**",
@@ -151,3 +152,4 @@ public class SecurityConfig {
     }
 
 }
+

@@ -50,66 +50,9 @@ public class GithubWebhookProcessor implements WebhookProcessorStrategy {
             }
 
             String action = rootNode.path("action").asText();
-            JsonNode issueNode = rootNode.path("issue");
-            
-            String issueNumber = issueNode.path("number").asText();
-            String externalTicketRef = "GH-" + issueNumber;
-            String title = issueNode.path("title").asText();
-            String body = issueNode.path("body").asText();
-            String htmlUrl = issueNode.path("html_url").asText();
-            String state = issueNode.path("state").asText();
-            
-            // Find assignee (try to match by GitHub email if present, or assign to unassigned)
-            Employee assignee = null;
-            JsonNode assigneeNode = issueNode.path("assignee");
-            if (!assigneeNode.isMissingNode() && !assigneeNode.isNull()) {
-                String assigneeLogin = assigneeNode.path("login").asText();
-                // In a real scenario, we might have a mapping of Github username to Employee. 
-                // For now, we try to match by email if github provides it, or just leave unassigned.
-                String assigneeEmail = assigneeNode.path("email").asText();
-                if (assigneeEmail != null && !assigneeEmail.isBlank()) {
-                    assignee = employeeRepository.findByAccountEmail(assigneeEmail).orElse(null);
-                }
-            }
-
-            Optional<Task> existingTaskOpt = config.getProject() != null
-                    ? taskRepository.findByExternalTicketRefAndSourceProviderAndProjectId(
-                            externalTicketRef, IntegrationProvider.GITHUB, config.getProject().getId())
-                    : taskRepository.findByExternalTicketRefAndSourceProvider(externalTicketRef, IntegrationProvider.GITHUB);
-
-            Task task;
-            if (existingTaskOpt.isPresent()) {
-                task = existingTaskOpt.get();
-                log.info("Updating existing GitHub task: {}", externalTicketRef);
-            } else {
-                task = new Task();
-                task.setExternalTicketRef(externalTicketRef);
-                task.setSourceProvider(IntegrationProvider.GITHUB);
-                task.setTeam(config.getTeam());
-                task.setProject(config.getProject());
-                log.info("Creating new GitHub task: {}", externalTicketRef);
-            }
-
-            task.setTitle(title);
-            task.setDescription(body);
-            task.setExternalUrl(htmlUrl);
-            task.setAssignee(assignee);
-            task.setTeam(config.getTeam());
-            task.setProject(config.getProject());
-            task.setPriority(mapPriority(issueNode.path("labels")));
-            task.setEstimatedHours(estimateHours(title, body));
-            
-            // Map status
-            if ("closed".equalsIgnoreCase(state)) {
-                task.setStatus(TaskStatus.DONE);
-            } else {
-                if (task.getStatus() == null || task.getStatus() == TaskStatus.DONE) {
-                    task.setStatus(TaskStatus.TODO); // Default when opened/reopened
-                }
-            }
-
-            taskAssessmentService.assess(task, "GITHUB_WEBHOOK");
-            taskRepository.save(task);
+            String issueNumber = rootNode.path("issue").path("number").asText();
+            log.info("Ignoring GitHub issue webhook as activity signal only | action: {}, issue: GH-{}", action, issueNumber);
+            return;
 
         } catch (Exception e) {
             log.error("Error processing GitHub webhook payload", e);

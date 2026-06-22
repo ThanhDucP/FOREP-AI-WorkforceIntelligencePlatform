@@ -12,4 +12,6 @@ import java.util.UUID;
 public interface GithubCommitRepository extends JpaRepository<GithubCommit, UUID> {
     Optional<GithubCommit> findByConfigIdAndRepositoryFullNameIgnoreCaseAndSha(UUID configId, String repositoryFullName, String sha);
     List<GithubCommit> findByTeamIdOrderByCommittedAtDesc(UUID teamId);
+    List<GithubCommit> findByProjectIdOrderByCommittedAtDesc(UUID projectId);
+    List<GithubCommit> findByTeamOrganizationIdOrderByCommittedAtDesc(UUID organizationId);
 }

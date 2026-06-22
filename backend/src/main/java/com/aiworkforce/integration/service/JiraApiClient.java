@@ -1,5 +1,6 @@
 package com.aiworkforce.integration.service;
 
+import com.aiworkforce.core.enums.ExternalIdentityProvider;
 import com.aiworkforce.core.enums.IntegrationProvider;
 import com.aiworkforce.core.enums.TaskPriority;
 import com.aiworkforce.core.enums.TaskStatus;
@@ -8,10 +9,12 @@ import com.aiworkforce.identity.entity.Employee;
 import com.aiworkforce.identity.repository.EmployeeRepository;
 import com.aiworkforce.identity.service.TeamMembershipService;
 import com.aiworkforce.integration.dto.SyncResult;
+import com.aiworkforce.integration.entity.ExternalIdentity;
 import com.aiworkforce.integration.entity.JiraIssueSnapshot;
 import com.aiworkforce.integration.entity.JiraProjectSnapshot;
 import com.aiworkforce.integration.entity.JiraSprintSnapshot;
 import com.aiworkforce.integration.entity.TaskIntegrationConfig;
+import com.aiworkforce.integration.repository.ExternalIdentityRepository;
 import com.aiworkforce.integration.repository.JiraIssueSnapshotRepository;
 import com.aiworkforce.integration.repository.JiraProjectSnapshotRepository;
 import com.aiworkforce.integration.repository.JiraSprintSnapshotRepository;
@@ -51,6 +54,7 @@ public class JiraApiClient {
     private final JiraSprintSnapshotRepository sprintSnapshotRepository;
     private final JiraIssueSnapshotRepository issueSnapshotRepository;
     private final TokenProtectionService tokenProtectionService;
+    private final ExternalIdentityRepository externalIdentityRepository;
 
     // Field for testing
     private String jiraApiUrlOverride = null;
@@ -309,10 +313,32 @@ public class JiraApiClient {
         snapshot.setProviderUpdatedAt(parseJiraDate(fields.path("updated").asText(null)));
         snapshot.setDueDate(parseDueDate(fields.path("duedate").asText(null)));
         issueSnapshotRepository.save(snapshot);
+        upsertJiraIdentity(config, assigneeNode);
+        upsertJiraIdentity(config, reporterNode);
         markProjectFeatureAvailability(config, projectRef, sprintRef != null, snapshot.getStoryPoints() != null, snapshot.getEpicKey() != null, snapshot.getFixVersions() != null, snapshot.getComponents() != null);
     }
 
 
+
+    private void upsertJiraIdentity(TaskIntegrationConfig config, JsonNode userNode) {
+        if (userNode == null || userNode.isMissingNode() || userNode.isNull()) return;
+        String accountId = userNode.path("accountId").asText(null);
+        if (accountId == null || accountId.isBlank()) return;
+        ExternalIdentity identity = externalIdentityRepository
+                .findByProviderAndExternalId(ExternalIdentityProvider.JIRA, accountId)
+                .orElseGet(ExternalIdentity::new);
+        identity.setProvider(ExternalIdentityProvider.JIRA);
+        identity.setExternalId(accountId);
+        identity.setUsername(userNode.path("emailAddress").asText(null));
+        identity.setDisplayName(userNode.path("displayName").asText(null));
+        identity.setEmail(userNode.path("emailAddress").asText(null));
+        identity.setAvatarUrl(userNode.path("avatarUrls").path("48x48").asText(null));
+        identity.setTeam(config.getTeam());
+        if (config.getTeam() != null) {
+            identity.setOrganization(config.getTeam().getOrganization());
+        }
+        externalIdentityRepository.save(identity);
+    }
     private void refreshProjectFeatureAvailability(TaskIntegrationConfig config, JiraProjectRef projectRef) {
         markProjectFeatureAvailability(
                 config,

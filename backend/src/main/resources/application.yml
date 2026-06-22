@@ -6,6 +6,17 @@ spring:
   
   datasource:
     driver-class-name: org.postgresql.Driver
+  mail:
+    host: ${SMTP_HOST:localhost}
+    port: ${SMTP_PORT:1025}
+    username: ${SMTP_USERNAME:}
+    password: ${SMTP_PASSWORD:}
+    properties:
+      mail:
+        smtp:
+          auth: ${SMTP_AUTH:false}
+          starttls:
+            enable: ${SMTP_STARTTLS:false}
     
   flyway:
     enabled: true
@@ -20,6 +31,14 @@ app:
   database:
     reset-on-start: ${APP_DATABASE_RESET_ON_START:false}
     reset-schema: ${APP_DATABASE_RESET_SCHEMA:public}
+  storage:
+    local-root: ${APP_STORAGE_LOCAL_ROOT:uploads}
+    max-file-size-bytes: ${APP_STORAGE_MAX_FILE_SIZE_BYTES:10485760}
+  email:
+    from: ${APP_EMAIL_FROM:no-reply@forep.local}
+    invitation:
+      enabled: ${APP_INVITATION_EMAIL_ENABLED:false}
+      subject: ${APP_INVITATION_EMAIL_SUBJECT:Activate your Project Intelligence account}
   security:
     jwt:
       secret-key: ${JWT_SECRET_KEY:404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970}
@@ -124,3 +143,7 @@ app:
   security:
     oauth2:
       enabled: true
+
+
+
+

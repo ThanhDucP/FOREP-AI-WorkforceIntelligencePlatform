@@ -32,6 +32,9 @@ public class Account extends AuditableEntity {
     private boolean locked = false;
     private int failedLoginAttempts = 0;
     private String avatarUrl;
+    private String activationToken;
+    private java.time.LocalDateTime invitationSentAt;
+    private java.time.LocalDateTime activatedAt;
     private String timezone;
     private Double focusScore;
     
