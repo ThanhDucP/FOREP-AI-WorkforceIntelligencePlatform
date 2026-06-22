@@ -1,5 +1,6 @@
 package com.aiworkforce.identity.controller;
 
+import com.aiworkforce.core.pagination.PaginationResponse;
 import com.aiworkforce.core.response.ApiResponse;
 import com.aiworkforce.identity.dto.EmployeeInvitationResponse;
 import com.aiworkforce.identity.dto.EmployeeRequest;
@@ -41,49 +42,52 @@ public class EmployeeController {
     }
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('DIRECTOR', 'MANAGER')")
-    public ResponseEntity<ApiResponse<List<EmployeeResponse>>> getAllEmployees() {
-        return ResponseEntity.ok(ApiResponse.success(employeeService.getAllEmployees()));
+    @PreAuthorize("hasAnyRole('SYSTEM_ADMIN', 'ADMIN', 'DIRECTOR', 'MANAGER')")
+    public ResponseEntity<ApiResponse<PaginationResponse<EmployeeResponse>>> getAllEmployees(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size
+    ) {
+        return ResponseEntity.ok(ApiResponse.success(employeeService.getAllEmployees(page, size)));
     }
 
     @GetMapping("/team/{teamId}")
-    @PreAuthorize("hasAnyRole('DIRECTOR', 'MANAGER')")
+    @PreAuthorize("hasAnyRole('SYSTEM_ADMIN', 'ADMIN', 'DIRECTOR', 'MANAGER')")
     public ResponseEntity<ApiResponse<List<EmployeeResponse>>> getEmployeesByTeam(@PathVariable UUID teamId) {
         return ResponseEntity.ok(ApiResponse.success(employeeService.getEmployeesByTeam(teamId)));
     }
 
     @GetMapping("/organization/{organizationId}")
-    @PreAuthorize("hasAnyRole('DIRECTOR', 'MANAGER')")
+    @PreAuthorize("hasAnyRole('SYSTEM_ADMIN', 'ADMIN', 'DIRECTOR', 'MANAGER')")
     public ResponseEntity<ApiResponse<List<EmployeeResponse>>> getEmployeesByOrganization(@PathVariable UUID organizationId) {
         return ResponseEntity.ok(ApiResponse.success(employeeService.getEmployeesByOrganization(organizationId)));
     }
 
     @GetMapping("/{id}")
-    @PreAuthorize("hasAnyRole('DIRECTOR', 'MANAGER') or @employeeService.getCurrentEmployee().getId().equals(#id)")
+    @PreAuthorize("hasAnyRole('SYSTEM_ADMIN', 'ADMIN', 'DIRECTOR', 'MANAGER') or @employeeService.getCurrentEmployee().getId().equals(#id)")
     public ResponseEntity<ApiResponse<EmployeeResponse>> getEmployeeById(@PathVariable UUID id) {
         return ResponseEntity.ok(ApiResponse.success(employeeService.getEmployeeById(id)));
     }
 
     @PostMapping("/{id}/invite")
-    @PreAuthorize("hasAnyRole('DIRECTOR', 'MANAGER')")
+    @PreAuthorize("hasAnyRole('SYSTEM_ADMIN', 'ADMIN', 'DIRECTOR', 'MANAGER')")
     public ResponseEntity<ApiResponse<EmployeeInvitationResponse>> invite(@PathVariable UUID id) {
         return ResponseEntity.ok(ApiResponse.success(employeeAccountService.sendInvite(id)));
     }
 
     @PostMapping("/{id}/reinvite")
-    @PreAuthorize("hasAnyRole('DIRECTOR', 'MANAGER')")
+    @PreAuthorize("hasAnyRole('SYSTEM_ADMIN', 'ADMIN', 'DIRECTOR', 'MANAGER')")
     public ResponseEntity<ApiResponse<EmployeeInvitationResponse>> reinvite(@PathVariable UUID id) {
         return ResponseEntity.ok(ApiResponse.success(employeeAccountService.reinvite(id)));
     }
 
     @PostMapping("/{id}/activate")
-    @PreAuthorize("hasAnyRole('DIRECTOR', 'MANAGER')")
+    @PreAuthorize("hasAnyRole('SYSTEM_ADMIN', 'ADMIN', 'DIRECTOR', 'MANAGER')")
     public ResponseEntity<ApiResponse<EmployeeInvitationResponse>> activate(@PathVariable UUID id) {
         return ResponseEntity.ok(ApiResponse.success(employeeAccountService.activate(id)));
     }
 
     @PostMapping("/{id}/deactivate")
-    @PreAuthorize("hasAnyRole('DIRECTOR', 'MANAGER')")
+    @PreAuthorize("hasAnyRole('SYSTEM_ADMIN', 'ADMIN', 'DIRECTOR', 'MANAGER')")
     public ResponseEntity<ApiResponse<EmployeeInvitationResponse>> deactivate(@PathVariable UUID id) {
         return ResponseEntity.ok(ApiResponse.success(employeeAccountService.deactivate(id)));
     }
